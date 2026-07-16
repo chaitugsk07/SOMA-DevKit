@@ -1,0 +1,80 @@
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+
+use crate::error::Result;
+use crate::migration::Migration;
+
+/// A deployed migration row from the tracking table.
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct AppliedMigration {
+    pub version: u32,
+    pub file: String,
+    pub name: String,
+    pub checksum: String,
+    pub description: Option<String>,
+    pub batch: i32,
+    pub applied_at: DateTime<Utc>,
+    pub applied_by: String,
+    pub execution_ms: Option<i32>,
+}
+
+impl AppliedMigration {
+    /// Construct a tracking-table row.
+    ///
+    /// Driver implementations use this inside `applied()` to build rows from
+    /// whatever backing store they query. The `#[non_exhaustive]` attribute on
+    /// the struct means struct-literal syntax is unavailable to external crates;
+    /// this constructor is the supported path for building `AppliedMigration` values.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        version: u32,
+        file: String,
+        name: String,
+        checksum: String,
+        description: Option<String>,
+        batch: i32,
+        applied_at: DateTime<Utc>,
+        applied_by: String,
+        execution_ms: Option<i32>,
+    ) -> Self {
+        Self {
+            version,
+            file,
+            name,
+            checksum,
+            description,
+            batch,
+            applied_at,
+            applied_by,
+            execution_ms,
+        }
+    }
+}
+
+/// A lock guard. Releases the advisory lock on Drop.
+/// The concrete implementation keeps a dedicated connection alive.
+pub trait LockGuard: Send + Sync {}
+
+/// Object-safe driver trait. Implement for each database backend.
+#[async_trait]
+pub trait MigrationDriver: Send + Sync {
+    /// Acquire an advisory lock. The lock is held until the returned guard is dropped.
+    async fn acquire_lock(&self) -> Result<Box<dyn LockGuard>>;
+
+    /// Execute one 00_setup file's SQL in a single transaction (untracked).
+    async fn run_setup_sql(&self, name: &str, sql: &str) -> Result<()>;
+
+    /// Ensure the deployment tracking table (and schema, if configured) exist.
+    async fn ensure_tracking_table(&self) -> Result<()>;
+
+    /// Return all applied migrations, ordered by (version ASC, file ASC).
+    async fn applied(&self) -> Result<Vec<AppliedMigration>>;
+
+    /// Apply a migration: run UP SQL AND insert the tracking row in ONE transaction.
+    /// The `up_sql` is passed in rather than re-reading the file in the driver.
+    async fn apply(&self, migration: &Migration, up_sql: &str, batch: i32) -> Result<()>;
+
+    /// Revert an applied migration: run `down_sql` AND delete the tracking row in ONE transaction.
+    async fn revert(&self, applied: &AppliedMigration, down_sql: &str) -> Result<()>;
+}

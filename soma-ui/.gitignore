@@ -1,0 +1,36 @@
+# Rust / Cargo
+/target
+**/target
+**/*.rs.bk
+
+# Trunk (web build output)
+/dist
+**/dist
+.trunk/
+
+# Flutter / Dart
+flutter/build/
+flutter/example/build/
+**/.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/.flutter-plugins*
+**/generated_plugin_registrant.*
+
+# Node
+node_modules/
+
+# QA / session artifacts (screenshots, traces)
+/.playwright-mcp/
+/screenshots/
+/*.png
+/console_errors.txt
+
+# Local agent / editor config
+/.claude/
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store

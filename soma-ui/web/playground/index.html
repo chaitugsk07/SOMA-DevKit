@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <script>
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+      else
+        document.documentElement.classList.remove('dark');
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soma UI</title>
+    <link data-trunk rel="tailwind-css" href="style/main.css" />
+    <link data-trunk rel="copy-dir" href="../theme/fonts" data-target-path="fonts" />
+    <link data-trunk rel="rust" />
+</head>
+<body class="min-h-screen">
+    <div id="app"></div>
+</body>
+</html>

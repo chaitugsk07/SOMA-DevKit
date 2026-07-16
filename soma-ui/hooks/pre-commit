@@ -1,0 +1,23 @@
+#!/bin/sh
+# Regenerate COMPONENTS.md when component source files are staged.
+# Enable for a fresh clone: git config core.hooksPath hooks
+
+# Find staged files under web/packages/ui/src/ (components, blocks, charts, screens, hooks)
+staged=$(git diff --cached --name-only | grep '^web/packages/ui/src/')
+
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+# Run from the repo root regardless of git's working directory
+root=$(git rev-parse --show-toplevel)
+cd "$root" || exit 1
+
+echo "soma-ui: component files staged — regenerating COMPONENTS.md"
+if ! ./dev.sh catalog; then
+  echo "soma-ui: COMPONENTS.md regeneration failed; commit blocked." >&2
+  exit 1
+fi
+
+git add web/COMPONENTS.md
+echo "soma-ui: regenerated COMPONENTS.md"

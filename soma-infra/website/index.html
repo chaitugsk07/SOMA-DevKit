@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>soma-infra — Shared backend boilerplate for Rust services</title>
+  <meta name="description" content="Configured clients and primitives — Postgres, Redis, crypto, storage, LLM, knowledge graph — feature-gated, logic-free. A library, not a server." />
+  <meta property="og:title" content="soma-infra — Shared backend boilerplate for Rust services" />
+  <meta property="og:description" content="Pick the features you need. Get configured clients and thin primitives. Logic stays in your app." />
+  <meta property="og:type" content="website" />
+
+  <!-- Favicon: stacked layers / building-blocks motif -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0c10'/%3E%3Crect x='6' y='20' width='20' height='5' rx='1.5' fill='%2338bdf8' opacity='.85'/%3E%3Crect x='8' y='13' width='16' height='5' rx='1.5' fill='%2338bdf8' opacity='.65'/%3E%3Crect x='10' y='7' width='12' height='5' rx='1.5' fill='%2338bdf8' opacity='.45'/%3E%3C/svg%3E" />
+
+  <!-- Google Fonts: JetBrains Mono + Hanken Grotesk (same as soma-audit) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Hanken+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Subtle background grid -->
+<div class="grid-bg" aria-hidden="true"></div>
+
+<!-- ════════════════════════════════════════════
+     NAV
+════════════════════════════════════════════ -->
+<nav aria-label="Main navigation">
+  <div class="container">
+    <a class="nav-brand" href="#top" aria-label="soma-infra home">
+      <svg class="nav-logo" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="28" height="28" rx="5" fill="#0d1018"/>
+        <rect x="4" y="18" width="20" height="5" rx="1.5" fill="#38bdf8" opacity=".85"/>
+        <rect x="6" y="11" width="16" height="5" rx="1.5" fill="#38bdf8" opacity=".60"/>
+        <rect x="9" y="5"  width="10" height="5" rx="1.5" fill="#38bdf8" opacity=".40"/>
+      </svg>
+      <span class="nav-brand-name">soma-infra<span class="dot">.</span></span>
+    </a>
+    <ul class="nav-links" role="list">
+      <li><a href="#features">Modules</a></li>
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#usage">Usage</a></li>
+      <li><a href="#docs">Docs</a></li>
+      <li><a href="https://github.com/chaitugsk07/soma-infra" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════
+     HERO
+════════════════════════════════════════════ -->
+<main id="top">
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-badge" aria-label="Status: Early · Apache-2.0 · Library">
+        <span class="hero-badge-dot" aria-hidden="true"></span>
+        Early · Apache-2.0 · Library
+      </div>
+
+      <h1 class="hero-title" id="hero-heading">
+        Shared backend<br/>
+        <span class="accent-word">boilerplate</span><br/>
+        for any Rust app.
+      </h1>
+
+      <p class="hero-sub">
+        Configured clients and primitives — Postgres, Redis, crypto, storage,
+        LLM, knowledge graph — feature-gated, logic-free.
+        A library, not a server. You pick features; logic stays in your app.
+      </p>
+
+      <div class="hero-actions">
+        <a href="#features" class="btn-primary">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M5 7l2 2 2-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          See the modules
+        </a>
+        <a href="https://github.com/chaitugsk07/soma-infra" class="btn-secondary" target="_blank" rel="noopener noreferrer">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M7 1C3.69 1 1 3.748 1 7.135c0 2.714 1.72 5.015 4.104 5.826.3.057.41-.133.41-.296v-1.034c-1.67.373-2.02-.826-2.02-.826-.274-.714-.67-.904-.67-.904-.546-.383.042-.375.042-.375.604.043.922.636.922.636.536.943 1.407.67 1.75.513.055-.4.21-.67.38-.824-1.333-.155-2.734-.684-2.734-3.043 0-.672.234-1.22.617-1.651-.062-.154-.267-.78.059-1.627 0 0 .503-.164 1.648.63A5.61 5.61 0 0 1 7 4.77c.51.002 1.024.07 1.503.207 1.145-.794 1.647-.63 1.647-.63.326.847.12 1.473.06 1.627.384.43.616.98.616 1.651 0 2.366-1.403 2.887-2.74 3.04.216.19.407.565.407 1.14v1.69c0 .164.11.356.414.296C11.28 12.15 13 9.849 13 7.135 13 3.748 10.314 1 7 1z" fill="currentColor"/>
+          </svg>
+          View on GitHub
+        </a>
+      </div>
+
+      <!-- Hero code block -->
+      <div class="code-block-wrap" role="region" aria-label="Cargo dependency and quick start">
+        <div class="code-header">
+          <div class="code-dots" aria-hidden="true">
+            <div class="code-dot red"></div>
+            <div class="code-dot yellow"></div>
+            <div class="code-dot green"></div>
+          </div>
+          <span class="code-lang">Cargo.toml + main.rs — quick start</span>
+          <button class="copy-btn" aria-label="Copy code to clipboard" data-copy-target="hero-code">copy</button>
+        </div>
+        <div class="code-block" id="hero-code" aria-label="Code example">
+          <div class="line"><span class="ln">1</span><span class="lc"><span class="cm"># Cargo.toml — pick the features your service needs</span></span></div>
+          <div class="line"><span class="ln">2</span><span class="lc"><span class="nm">soma-infra</span> <span class="pn">=</span> <span class="pn">{</span> <span class="nm">path</span> <span class="pn">=</span> <span class="st">"../soma-infra"</span><span class="pn">,</span> <span class="nm">features</span> <span class="pn">=</span> <span class="pn">[</span><span class="st">"db"</span><span class="pn">,</span> <span class="st">"tracing"</span><span class="pn">]</span> <span class="pn">}</span></span></div>
+          <div class="line"><span class="ln">3</span><span class="lc">&nbsp;</span></div>
+          <div class="line"><span class="ln">4</span><span class="lc"><span class="cm">// main.rs — two lines of setup, then your logic</span></span></div>
+          <div class="line"><span class="ln">5</span><span class="lc"><span class="fn_">soma_infra</span><span class="pn">::</span><span class="fn_">telemetry</span><span class="pn">::</span><span class="fn_">init</span><span class="pn">();</span>                    <span class="cm">// RUST_LOG-aware</span></span></div>
+          <div class="line"><span class="ln">6</span><span class="lc"><span class="kw">let</span> <span class="nm">pool</span> <span class="pn">=</span> <span class="fn_">soma_infra</span><span class="pn">::</span><span class="fn_">connect_from_env</span><span class="pn">().</span><span class="kw">await</span><span class="pn">?;</span>  <span class="cm">// reads DATABASE_URL</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     FEATURES GRID
+════════════════════════════════════════════ -->
+<section class="features-section" id="features" aria-labelledby="features-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" aria-hidden="true">Modules</div>
+      <h2 class="section-title" id="features-heading">One crate. Thirteen features.</h2>
+      <p class="section-desc">
+        Each concern is behind its own cargo feature. A db-only consumer never compiles
+        the LLM or crypto graphs. Change one module, unrelated consumers don't rebuild.
+      </p>
+    </div>
+
+    <div class="features-grid reveal stagger-2" role="list">
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag" aria-label="feature flag: db (default)"><code>db</code> <span class="default-badge">default</span></div>
+        <h4>Postgres pool</h4>
+        <p><code>connect_from_env()</code> — a configured <code>sqlx</code> PgPool with sane defaults, sslmode support, and application_name.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag" aria-label="feature flag: tracing (default)"><code>tracing</code> <span class="default-badge">default</span></div>
+        <h4>Structured logging</h4>
+        <p><code>telemetry::init()</code> — tracing-subscriber honouring <code>RUST_LOG</code>; human or <code>LOG_FORMAT=json</code>.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>cache</code></div>
+        <h4>Redis client</h4>
+        <p><code>connect_from_env()</code> — multiplexed, auto-reconnecting <code>ConnectionManager</code>; thin GET/SET/SETEX/DEL/EXPIRE helpers.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>crypto</code></div>
+        <h4>Crypto primitives</h4>
+        <p>AES-256-GCM encrypt/decrypt, Argon2id password hashing, HKDF-SHA256, HMAC-SHA256, SHA-256. Caller supplies all parameters.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>storage-s3</code></div>
+        <h4>AWS S3 storage</h4>
+        <p><code>StorageClient::from_env()</code> — configured S3 (or S3-compatible) handle; thin <code>get</code>/<code>put</code>/<code>delete</code>.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>storage-azure</code></div>
+        <h4>Azure Blob storage</h4>
+        <p><code>StorageClient::from_env()</code> — configured Azure Blob handle; same thin API as <code>storage-s3</code>.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>llm</code></div>
+        <h4>Anthropic LLM client</h4>
+        <p><code>LlmClient::from_env()</code> — typed <code>MessagesRequest</code>/<code>MessagesResponse</code> + token usage. No retry, no prompt logic.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>kg</code></div>
+        <h4>Knowledge graph</h4>
+        <p>Upsert nodes/edges, one-hop neighbor traversal, pgvector cosine-distance similarity search. No embedding generation.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>http</code></div>
+        <h4>HTTP client</h4>
+        <p><code>client()</code> — a <code>reqwest::Client</code> with rustls TLS and sane default timeouts (30s request, 10s connect).</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>signal</code></div>
+        <h4>Graceful shutdown</h4>
+        <p><code>shutdown_signal()</code> — await Ctrl-C (SIGINT) or SIGTERM. Pure plumbing; does not log.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>config</code></div>
+        <h4>Env helpers</h4>
+        <p><code>require_env</code> / <code>env_or</code> / <code>env_parse</code> — tiny typed env-var helpers with clear error messages.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>errors</code></div>
+        <h4>Safe DB errors</h4>
+        <p><code>redact_db_error</code> — a client-safe message for a <code>sqlx::Error</code>. No SQL text, no bound params, no PII.</p>
+      </div>
+
+      <div class="feature-cell" role="listitem">
+        <div class="feature-flag"><code>testing</code></div>
+        <h4>Test harness</h4>
+        <p><code>TestDb::create_from_env()</code> — an isolated, auto-dropped Postgres database per test. Self-cleaning even on panic.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     HOW IT WORKS
+════════════════════════════════════════════ -->
+<section class="how-section" id="how-it-works" aria-labelledby="how-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" aria-hidden="true">Architecture</div>
+      <h2 class="section-title" id="how-heading">A library you <code style="font-size:inherit">use</code>.<br/>Not a service you run.</h2>
+      <p class="section-desc">
+        There is no binary, no daemon, no HTTP port. You add soma-infra as a Cargo
+        dependency, select features, and call into configured clients from your own code.
+      </p>
+    </div>
+
+    <div class="how-grid reveal stagger-2">
+      <div class="how-card">
+        <div class="how-tag">Mechanism here</div>
+        <h3>soma-infra</h3>
+        <p>
+          Pool builder, TLS setup, AES-256-GCM wire format, Argon2id PHC strings,
+          HKDF/HMAC/SHA-256 math, object-store auth wiring, Anthropic wire protocol,
+          pgvector query helpers, SIGTERM plumbing.
+          Decision-free operations a service would otherwise hand-roll.
+        </p>
+      </div>
+      <div class="how-card">
+        <div class="how-tag">Policy in your app</div>
+        <h3>Your service</h3>
+        <p>
+          KDF salt/info strings, which fields to encrypt, SQLSTATE→domain-error mapping,
+          migration schema and advisory lock key, prompt construction and retry logic,
+          object key naming, rate-limit backoff strategy, embedding generation, what to
+          log on shutdown.
+        </p>
+      </div>
+    </div>
+
+    <div class="how-rule reveal stagger-3">
+      <strong>The rule:</strong> soma-infra ships the mechanism, never the policy. If a function
+      makes a decision the service should own, it does not belong here.
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     USAGE SNIPPET
+════════════════════════════════════════════ -->
+<section class="usage-section" id="usage" aria-labelledby="usage-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" aria-hidden="true">Usage</div>
+      <h2 class="section-title" id="usage-heading">Pick features. Call helpers.</h2>
+      <p class="section-desc">
+        Three representative snippets. See <a href="https://github.com/chaitugsk07/soma-infra/blob/main/CONSUMING.md" target="_blank" rel="noopener noreferrer" class="inline-link">CONSUMING.md</a> for the full per-module guide.
+      </p>
+    </div>
+
+    <div class="usage-tabs reveal stagger-2">
+
+      <div class="usage-box">
+        <div class="code-block-wrap">
+          <div class="code-header">
+            <div class="code-dots" aria-hidden="true">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <span class="code-lang">Database pool</span>
+          </div>
+          <div class="code-block">
+            <div class="line"><span class="ln">1</span><span class="lc"><span class="cm">// Cargo.toml (default features include "db" + "tracing")</span></span></div>
+            <div class="line"><span class="ln">2</span><span class="lc"><span class="nm">soma-infra</span> <span class="pn">=</span> <span class="pn">{</span> <span class="nm">path</span> <span class="pn">=</span> <span class="st">"../soma-infra"</span> <span class="pn">}</span></span></div>
+            <div class="line"><span class="ln">3</span><span class="lc">&nbsp;</span></div>
+            <div class="line"><span class="ln">4</span><span class="lc"><span class="cm">// main.rs</span></span></div>
+            <div class="line"><span class="ln">5</span><span class="lc"><span class="fn_">soma_infra</span><span class="pn">::</span><span class="fn_">telemetry</span><span class="pn">::</span><span class="fn_">init</span><span class="pn">();</span></span></div>
+            <div class="line"><span class="ln">6</span><span class="lc"><span class="kw">let</span> <span class="nm">pool</span> <span class="pn">=</span> <span class="fn_">soma_infra</span><span class="pn">::</span><span class="fn_">connect_from_env</span><span class="pn">().</span><span class="kw">await</span><span class="pn">?;</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="usage-box">
+        <div class="code-block-wrap">
+          <div class="code-header">
+            <div class="code-dots" aria-hidden="true">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <span class="code-lang">Crypto primitives</span>
+          </div>
+          <div class="code-block">
+            <div class="line"><span class="ln">1</span><span class="lc"><span class="kw">use</span> <span class="nm">soma_infra</span><span class="pn">::</span><span class="nm">crypto</span><span class="pn">;</span></span></div>
+            <div class="line"><span class="ln">2</span><span class="lc">&nbsp;</span></div>
+            <div class="line"><span class="ln">3</span><span class="lc"><span class="cm">// Caller names the env var — that's your policy.</span></span></div>
+            <div class="line"><span class="ln">4</span><span class="lc"><span class="kw">let</span> <span class="nm">key</span> <span class="pn">=</span> <span class="fn_">crypto</span><span class="pn">::</span><span class="ty">CryptoKey</span><span class="pn">::</span><span class="fn_">from_env</span><span class="pn">(</span><span class="st">"CRYPTO_KEY"</span><span class="pn">)?;</span></span></div>
+            <div class="line"><span class="ln">5</span><span class="lc"><span class="kw">let</span> <span class="nm">ct</span> <span class="pn">=</span> <span class="fn_">crypto</span><span class="pn">::</span><span class="fn_">encrypt</span><span class="pn">(&amp;</span><span class="nm">key</span><span class="pn">,</span> <span class="nm">plaintext</span><span class="pn">,</span> <span class="nm">aad</span><span class="pn">)?;</span></span></div>
+            <div class="line"><span class="ln">6</span><span class="lc"><span class="kw">let</span> <span class="nm">dk</span> <span class="pn">=</span> <span class="fn_">crypto</span><span class="pn">::</span><span class="fn_">hkdf_sha256</span><span class="pn">(</span><span class="nm">ikm</span><span class="pn">,</span> <span class="kw">Some</span><span class="pn">(</span><span class="nm">salt</span><span class="pn">),</span> <span class="nm">info</span><span class="pn">,</span> <span class="st">32</span><span class="pn">)?;</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="usage-box">
+        <div class="code-block-wrap">
+          <div class="code-header">
+            <div class="code-dots" aria-hidden="true">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+            </div>
+            <span class="code-lang">Graceful shutdown + integration test</span>
+          </div>
+          <div class="code-block">
+            <div class="line"><span class="ln">1</span><span class="lc"><span class="cm">// Graceful shutdown with axum</span></span></div>
+            <div class="line"><span class="ln">2</span><span class="lc"><span class="nm">axum</span><span class="pn">::</span><span class="fn_">serve</span><span class="pn">(</span><span class="nm">listener</span><span class="pn">,</span> <span class="nm">router</span><span class="pn">)</span></span></div>
+            <div class="line"><span class="ln">3</span><span class="lc">    <span class="pn">.</span><span class="fn_">with_graceful_shutdown</span><span class="pn">(</span><span class="fn_">soma_infra</span><span class="pn">::</span><span class="nm">signal</span><span class="pn">::</span><span class="fn_">shutdown_signal</span><span class="pn">())</span></span></div>
+            <div class="line"><span class="ln">4</span><span class="lc">    <span class="pn">.</span><span class="kw">await</span><span class="pn">?;</span></span></div>
+            <div class="line"><span class="ln">5</span><span class="lc">&nbsp;</span></div>
+            <div class="line"><span class="ln">6</span><span class="lc"><span class="cm">// Integration test with an isolated, auto-dropped DB</span></span></div>
+            <div class="line"><span class="ln">7</span><span class="lc"><span class="kw">let</span> <span class="nm">db</span> <span class="pn">=</span> <span class="fn_">soma_infra</span><span class="pn">::</span><span class="ty">TestDb</span><span class="pn">::</span><span class="fn_">create_from_env</span><span class="pn">().</span><span class="kw">await</span><span class="pn">?;</span></span></div>
+            <div class="line"><span class="ln">8</span><span class="lc"><span class="cm">// ... use db.pool ... dropped + cleaned up automatically</span></span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     DOCS / LINKS
+════════════════════════════════════════════ -->
+<section class="links-section" id="docs" aria-labelledby="docs-heading">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" aria-hidden="true">Docs &amp; source</div>
+      <h2 class="section-title" id="docs-heading" style="font-size:clamp(20px,2.8vw,30px)">Read the source.</h2>
+    </div>
+
+    <div class="links-grid reveal stagger-2">
+      <a href="https://github.com/chaitugsk07/soma-infra/blob/main/README.md" class="link-card" target="_blank" rel="noopener noreferrer">
+        <span class="link-card-icon" aria-hidden="true">📄</span>
+        README.md
+      </a>
+      <a href="https://github.com/chaitugsk07/soma-infra/blob/main/CONSUMING.md" class="link-card" target="_blank" rel="noopener noreferrer">
+        <span class="link-card-icon" aria-hidden="true">🔌</span>
+        CONSUMING.md
+      </a>
+      <a href="https://github.com/chaitugsk07/soma-infra/blob/main/Cargo.toml" class="link-card" target="_blank" rel="noopener noreferrer">
+        <span class="link-card-icon" aria-hidden="true">📦</span>
+        Cargo.toml (features)
+      </a>
+      <a href="https://github.com/chaitugsk07/soma-infra/tree/main/src" class="link-card" target="_blank" rel="noopener noreferrer">
+        <span class="link-card-icon" aria-hidden="true">⚙</span>
+        src/ — module sources
+      </a>
+      <a href="https://github.com/chaitugsk07/soma-infra" class="link-card" target="_blank" rel="noopener noreferrer">
+        <span class="link-card-icon" aria-hidden="true">⭐</span>
+        GitHub repo
+      </a>
+      <a href="https://github.com/chaitugsk07/soma-infra/blob/main/CLAUDE.md" class="link-card" target="_blank" rel="noopener noreferrer">
+        <span class="link-card-icon" aria-hidden="true">📋</span>
+        CLAUDE.md — contributor guide
+      </a>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <div class="footer-brand">
+      <strong>soma-infra</strong> — Apache-2.0. Part of the soma platform.
+    </div>
+    <div class="footer-meta">
+      <span class="footer-status">
+        <span class="footer-status-dot" aria-hidden="true"></span>
+        Early. Library, no binary. Feature-gated, logic-free.
+      </span>
+      <span class="footer-license">
+        <a href="https://github.com/chaitugsk07/soma-infra" target="_blank" rel="noopener noreferrer"
+           style="color:inherit;text-decoration:none;">github.com/chaitugsk07/soma-infra</a>
+      </span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

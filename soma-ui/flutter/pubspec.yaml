@@ -1,0 +1,41 @@
+name: soma_ui
+description: "Flutter component library mirroring soma-ui design system. Dark-first, zinc/blue palette."
+version: 0.1.0
+homepage: https://github.com/soma-platform/soma-ui
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  lucide_icons_flutter: ^3.1.14+2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/outfit-v15-latin-regular.ttf
+        - asset: assets/fonts/outfit-v15-latin-500.ttf
+          weight: 500
+        - asset: assets/fonts/outfit-v15-latin-600.ttf
+          weight: 600
+        - asset: assets/fonts/outfit-v15-latin-700.ttf
+          weight: 700
+    - family: Rajdhani
+      fonts:
+        - asset: assets/fonts/rajdhani-v17-latin-regular.ttf
+        - asset: assets/fonts/rajdhani-v17-latin-500.ttf
+          weight: 500
+        - asset: assets/fonts/rajdhani-v17-latin-600.ttf
+          weight: 600
+        - asset: assets/fonts/rajdhani-v17-latin-700.ttf
+          weight: 700
+  assets:
+    - assets/fonts/

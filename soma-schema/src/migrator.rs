@@ -1,0 +1,507 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use crate::discovery::discover;
+use crate::driver::{AppliedMigration, MigrationDriver};
+use crate::error::{Error, Result};
+
+/// A pending migration (in manifest order, not yet applied).
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct PendingMigration {
+    pub version: u32,
+    pub file: String,
+    pub why: Option<String>,
+    pub created: Option<String>,
+    pub author: Option<String>,
+    /// Version description from the manifest (for status display).
+    pub version_description: Option<String>,
+}
+
+/// The status of all migrations.
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct MigrationStatus {
+    pub applied: Vec<AppliedMigration>,
+    pub pending: Vec<PendingMigration>,
+    /// Integrity problems detected: checksum mismatches or applied-but-missing files.
+    /// Non-empty means `up` would fail if run now.
+    pub drift_errors: Vec<String>,
+}
+
+pub struct Migrator {
+    root: PathBuf,
+    /// Keeps the unpacked temp dir alive for embedded migrators; None for from_root.
+    _embedded_tmp: Option<tempfile::TempDir>,
+}
+
+impl Migrator {
+    pub fn from_root(root: impl Into<PathBuf>) -> Self {
+        Self {
+            root: root.into(),
+            _embedded_tmp: None,
+        }
+    }
+
+    /// Build a Migrator from a compile-time-embedded migrations directory
+    /// (via the `include_dir` crate). The embedded tree must follow the same
+    /// layout as an on-disk migrations root: migration-order.yaml, 00_setup/,
+    /// 01_migrated/<v>/, 02_inprogress/<v>/.
+    ///
+    /// The files are unpacked to a temporary directory whose lifetime is tied
+    /// to the returned Migrator, then the existing disk-based discovery runs
+    /// against it. Checksums are byte-identical to the on-disk form.
+    pub fn from_embedded(dir: &include_dir::Dir<'_>) -> Result<Self> {
+        let tmp = tempfile::TempDir::new()?;
+        dir.extract(tmp.path())?;
+        let root = tmp.path().to_path_buf();
+        Ok(Self {
+            root,
+            _embedded_tmp: Some(tmp),
+        })
+    }
+
+    /// Apply all pending migrations in manifest order.
+    ///
+    /// Steps:
+    /// 1. Acquire advisory lock.
+    /// 2. Run all 00_setup files (untracked, idempotent).
+    /// 3. Ensure tracking table exists.
+    /// 4. Load applied migrations; verify checksums.
+    /// 5. Apply each pending migration in manifest order; stop on first error.
+    ///    SQL content comes from the same file read that computed the checksum (no TOCTOU).
+    pub async fn up(&self, driver: &dyn MigrationDriver) -> Result<()> {
+        let _lock = driver.acquire_lock().await?;
+
+        let (migrations, setup_files) = discover(&self.root)?;
+
+        // Run 00_setup files (idempotent bootstrap) — content read lazily here.
+        for sf in &setup_files {
+            let sql = sf.read_sql()?;
+            driver.run_setup_sql(&sf.name, &sql).await?;
+        }
+
+        driver.ensure_tracking_table().await?;
+
+        let applied = driver.applied().await?;
+
+        // Verify checksums of already-applied migrations.
+        // If a migration is in the DB but no longer on disk / in the manifest, that is
+        // an explicit integrity violation — surface it rather than silently skipping.
+        for am in &applied {
+            match migrations
+                .iter()
+                .find(|m| m.version == am.version && m.file == am.file)
+            {
+                None => {
+                    return Err(Error::AppliedButMissing {
+                        version: am.version,
+                        file: am.file.clone(),
+                    });
+                }
+                Some(m) if m.checksum != am.checksum => {
+                    return Err(Error::ChecksumDrift {
+                        version: am.version,
+                        file: am.file.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
+        // Compute next batch number.
+        let batch = applied.iter().map(|a| a.batch).max().unwrap_or(0) + 1;
+
+        // Determine which migrations are pending (in manifest order).
+        let applied_keys: std::collections::HashSet<(u32, &str)> = applied
+            .iter()
+            .map(|a| (a.version, a.file.as_str()))
+            .collect();
+
+        for migration in &migrations {
+            if !applied_keys.contains(&(migration.version, migration.file.as_str())) {
+                // SQL content comes from the stored raw field (same read as checksum).
+                let (up_sql, _) = migration.read_up();
+                driver.apply(migration, &up_sql, batch).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Revert the last `steps` applied migrations in reverse manifest order.
+    ///
+    /// Revert order is the exact reverse of the manifest-defined apply order:
+    /// the migration with the highest manifest position is reverted first.
+    /// This guarantees FK safety regardless of filename naming conventions.
+    pub async fn down(&self, driver: &dyn MigrationDriver, steps: usize) -> Result<()> {
+        if steps == 0 {
+            return Ok(());
+        }
+
+        let _lock = driver.acquire_lock().await?;
+
+        let (migrations, _setup_files) = discover(&self.root)?;
+
+        // Ensure the tracking table exists so applied() doesn't crash on a fresh DB.
+        driver.ensure_tracking_table().await?;
+
+        let applied = driver.applied().await?;
+
+        // Integrity check ALL applied migrations before reverting any — same guard as up().
+        // Without this, applied migrations outside the take(steps) window would be silently
+        // skipped even if their files are gone from the manifest.
+        for am in &applied {
+            if migrations
+                .iter()
+                .find(|m| m.version == am.version && m.file == am.file)
+                .is_none()
+            {
+                return Err(Error::AppliedButMissing {
+                    version: am.version,
+                    file: am.file.clone(),
+                });
+            }
+        }
+
+        // Build a position map from manifest order so revert order is deterministic
+        // and independent of filename lexicographic order.
+        let position: HashMap<(u32, &str), usize> = migrations
+            .iter()
+            .enumerate()
+            .map(|(i, m)| ((m.version, m.file.as_str()), i))
+            .collect();
+
+        let mut applied = applied;
+        // Sort descending by manifest position — the last-applied migration reverts first.
+        applied.sort_by(|a, b| {
+            let pos_a = position
+                .get(&(a.version, a.file.as_str()))
+                .copied()
+                .unwrap_or(0);
+            let pos_b = position
+                .get(&(b.version, b.file.as_str()))
+                .copied()
+                .unwrap_or(0);
+            pos_b.cmp(&pos_a)
+        });
+
+        for am in applied.iter().take(steps) {
+            let migration = migrations
+                .iter()
+                .find(|m| m.version == am.version && m.file == am.file)
+                .ok_or_else(|| Error::MissingFile {
+                    version: am.version,
+                    file: am.file.clone(),
+                })?;
+
+            // Guard against modified DOWN SQL after the migration was applied.
+            if migration.checksum != am.checksum {
+                return Err(Error::ChecksumDrift {
+                    version: am.version,
+                    file: am.file.clone(),
+                });
+            }
+
+            // SQL content comes from the stored raw field (same read as checksum).
+            let down_sql = migration.read_down().ok_or_else(|| Error::MissingDown {
+                version: am.version,
+                file: am.file.clone(),
+            })?;
+
+            driver.revert(am, &down_sql).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Return the current migration status: applied + pending.
+    ///
+    /// Status is a read-only snapshot — it does NOT acquire the advisory lock.
+    /// Acquiring the exclusive lock would cause `soma-schema status` to block while
+    /// an `up`/`down` is running, which is confusing and unnecessary. The reads
+    /// (`applied()`, `ensure_tracking_table`) are safe without serialization.
+    pub async fn status(&self, driver: &dyn MigrationDriver) -> Result<MigrationStatus> {
+        // We need version descriptions from the manifest for the status display.
+        let manifest_path = self.root.join("migration-order.yaml");
+        let yaml = std::fs::read_to_string(&manifest_path)?;
+        let manifest = crate::manifest::Manifest::from_yaml(&yaml)?;
+        // Build version -> description map.
+        let version_desc: HashMap<u32, Option<String>> = manifest
+            .versions
+            .into_iter()
+            .map(|mv| (mv.version, mv.description))
+            .collect();
+
+        let (migrations, _setup_files) = discover(&self.root)?;
+
+        driver.ensure_tracking_table().await?;
+
+        let applied = driver.applied().await?;
+
+        // Run the same integrity cross-reference as up()/down() so that status()
+        // is a real pre-flight check — collect errors rather than aborting.
+        let mut drift_errors: Vec<String> = Vec::new();
+        for am in &applied {
+            match migrations
+                .iter()
+                .find(|m| m.version == am.version && m.file == am.file)
+            {
+                None => {
+                    drift_errors.push(format!(
+                        "v{} {} — applied but no longer in the manifest (AppliedButMissing)",
+                        am.version, am.file
+                    ));
+                }
+                Some(m) if m.checksum != am.checksum => {
+                    drift_errors.push(format!(
+                        "v{} {} — checksum mismatch (file was modified after being applied)",
+                        am.version, am.file
+                    ));
+                }
+                Some(_) => {}
+            }
+        }
+
+        let applied_keys: std::collections::HashSet<(u32, &str)> = applied
+            .iter()
+            .map(|a| (a.version, a.file.as_str()))
+            .collect();
+
+        let pending: Vec<PendingMigration> = migrations
+            .iter()
+            .filter(|m| !applied_keys.contains(&(m.version, m.file.as_str())))
+            .map(|m| PendingMigration {
+                version: m.version,
+                file: m.file.clone(),
+                why: m.why.clone(),
+                created: m.created.clone(),
+                author: m.author.clone(),
+                version_description: version_desc.get(&m.version).and_then(|d| d.clone()),
+            })
+            .collect();
+
+        Ok(MigrationStatus {
+            applied,
+            pending,
+            drift_errors,
+        })
+    }
+
+    /// Scaffold a new migrations root directory.
+    ///
+    /// Creates:
+    /// - `migration-order.yaml` (manifest with the example migration pre-listed)
+    /// - `00_setup/01_schema.sql` (idempotent bootstrap stub)
+    /// - `01_migrated/1/20260101_01_example.sql` (runnable first migration)
+    /// - `02_inprogress/` (staging area for in-flight work)
+    ///
+    /// After scaffolding, `soma-schema up` succeeds with no further edits.
+    pub fn scaffold(root: &Path) -> Result<()> {
+        std::fs::create_dir_all(root.join("00_setup"))?;
+        std::fs::create_dir_all(root.join("01_migrated").join("1"))?;
+        std::fs::create_dir_all(root.join("02_inprogress"))?;
+
+        let manifest_path = root.join("migration-order.yaml");
+        if !manifest_path.exists() {
+            std::fs::write(&manifest_path, MANIFEST_TEMPLATE)?;
+        }
+
+        let setup_path = root.join("00_setup").join("01_schema.sql");
+        if !setup_path.exists() {
+            std::fs::write(&setup_path, SETUP_TEMPLATE)?;
+        }
+
+        let example_path = root
+            .join("01_migrated")
+            .join("1")
+            .join("20260101_01_example.sql");
+        if !example_path.exists() {
+            std::fs::write(&example_path, EXAMPLE_MIGRATION)?;
+        }
+
+        Ok(())
+    }
+}
+
+const MANIFEST_TEMPLATE: &str = r#"# migration-order.yaml
+# Canonical, ordered record of every migration. The runner executes migrations
+# in this exact order: versions ascending, then each migration top-to-bottom.
+#
+# RULES:
+#   - Every .sql file under a version folder MUST be listed here.
+#   - Every entry MUST resolve to a real file (01_migrated/<v>/<file> or 02_inprogress/<v>/<file>).
+#   - 'file' must be a bare filename (no path separators, no '..', must end in .sql).
+#   - (00_setup files are NOT listed here — they are the untracked idempotent bootstrap.)
+#
+# Version folders are named by a positive integer (1, 2, 3, ...).
+# Stay in version 1 until you deliberately move to version 2.
+# Sort versions NUMERICALLY (1, 2, ..., 10 — never lexically).
+manifest_version: 1
+versions:
+  - version: 1
+    description: "Initial schema"
+    migrations:
+      - file: "20260101_01_example.sql"
+        created: "2026-01-01"
+        author: "you"
+        why: "Example first migration — rename or replace with your real tables"
+"#;
+
+const SETUP_TEMPLATE: &str = r#"-- 00_setup/01_schema.sql
+-- Idempotent project bootstrap. Runs UNCONDITIONALLY before every up(), untracked.
+-- Every statement MUST be idempotent: use IF NOT EXISTS, CREATE OR REPLACE, etc.
+
+-- Replace 'myapp' with your application schema name.
+CREATE SCHEMA IF NOT EXISTS myapp;
+
+-- Example: enable pgcrypto for gen_random_uuid().
+-- CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Example: a shared updated_at trigger function (CREATE OR REPLACE is idempotent).
+-- CREATE OR REPLACE FUNCTION fn_update_timestamp()
+-- RETURNS TRIGGER LANGUAGE plpgsql AS $$
+-- BEGIN
+--   NEW.updated_at = now();
+--   RETURN NEW;
+-- END;
+-- $$;
+"#;
+
+/// A runnable example first migration. Listed in the generated manifest so that
+/// `soma-schema up` succeeds immediately after `soma-schema init <dir>`.
+const EXAMPLE_MIGRATION: &str = r#"-- 01_migrated/1/20260101_01_example.sql
+-- Example migration: rename this file and replace the SQL with your real schema.
+
+CREATE TABLE IF NOT EXISTS example_items (
+    id   BIGSERIAL    PRIMARY KEY,
+    name TEXT         NOT NULL
+);
+
+-- DOWN ==
+DROP TABLE IF EXISTS example_items;
+"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use include_dir::include_dir;
+
+    // Embed the fixture migrations directory. The path is resolved at compile time
+    // relative to the crate root (where Cargo.toml lives), so we use CARGO_MANIFEST_DIR.
+    static FIXTURE_DIR: include_dir::Dir =
+        include_dir!("$CARGO_MANIFEST_DIR/tests/fixtures/embedded-migrations");
+
+    /// Checksums produced by discover() via from_embedded must be byte-identical to
+    /// those produced by from_root on the same fixture on disk.
+    ///
+    /// This proves that the embedded bytes are written out unchanged — a migration
+    /// applied on-disk and then re-verified via from_embedded will not trigger
+    /// a spurious ChecksumDrift error.
+    #[test]
+    fn test_from_embedded_matches_from_root() {
+        let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/embedded-migrations");
+
+        let embedded = Migrator::from_embedded(&FIXTURE_DIR).expect("from_embedded should succeed");
+        let (embedded_migrations, _) = crate::discovery::discover(&embedded.root)
+            .expect("discover via embedded should succeed");
+
+        let disk = Migrator::from_root(&fixture_path);
+        let (disk_migrations, _) =
+            crate::discovery::discover(&disk.root).expect("discover via from_root should succeed");
+
+        assert_eq!(
+            embedded_migrations.len(),
+            disk_migrations.len(),
+            "same number of migrations"
+        );
+        for (emb, dsk) in embedded_migrations.iter().zip(disk_migrations.iter()) {
+            assert_eq!(emb.version, dsk.version, "version matches");
+            assert_eq!(emb.file, dsk.file, "filename matches");
+            assert_eq!(
+                emb.checksum, dsk.checksum,
+                "checksum must be byte-identical for v{} {}",
+                emb.version, emb.file
+            );
+        }
+    }
+
+    /// from_embedded unpacks all files that discover() needs: migration-order.yaml,
+    /// at least one migration file, and at least one setup file.
+    #[test]
+    fn test_from_embedded_unpacks_all_files() {
+        let embedded = Migrator::from_embedded(&FIXTURE_DIR).expect("from_embedded should succeed");
+        let (migrations, setup_files) = crate::discovery::discover(&embedded.root)
+            .expect("discover() should succeed on unpacked tree");
+
+        assert_eq!(migrations.len(), 1, "one migration in the fixture");
+        assert_eq!(
+            migrations[0].file, "20260101_01_init.sql",
+            "correct migration filename"
+        );
+        assert_eq!(setup_files.len(), 1, "one setup file in the fixture");
+        assert_eq!(
+            setup_files[0].name, "01_schema.sql",
+            "correct setup filename"
+        );
+    }
+
+    #[test]
+    fn scaffold_manifest_lists_example_file() {
+        let dir = tempfile::tempdir().unwrap();
+        Migrator::scaffold(dir.path()).unwrap();
+
+        let yaml = std::fs::read_to_string(dir.path().join("migration-order.yaml")).unwrap();
+        let manifest = crate::manifest::Manifest::from_yaml(&yaml).unwrap();
+
+        assert_eq!(manifest.versions.len(), 1);
+        let v1 = &manifest.versions[0];
+        assert_eq!(v1.version, 1);
+        assert_eq!(v1.migrations.len(), 1);
+        assert_eq!(v1.migrations[0].file, "20260101_01_example.sql");
+    }
+
+    #[test]
+    fn scaffold_example_file_has_up_and_down() {
+        let dir = tempfile::tempdir().unwrap();
+        Migrator::scaffold(dir.path()).unwrap();
+
+        let sql = std::fs::read_to_string(
+            dir.path()
+                .join("01_migrated")
+                .join("1")
+                .join("20260101_01_example.sql"),
+        )
+        .unwrap();
+
+        // Must have content before the DOWN separator.
+        let down_sep = "-- DOWN ==";
+        let sep_pos = sql.find(down_sep).expect("DOWN separator must be present");
+        let up_part = &sql[..sep_pos];
+        assert!(!up_part.trim().is_empty(), "UP section must not be empty");
+
+        // Must have content after the DOWN separator.
+        let down_part = &sql[sep_pos + down_sep.len()..];
+        assert!(
+            !down_part.trim().is_empty(),
+            "DOWN section must not be empty"
+        );
+    }
+
+    #[test]
+    fn scaffold_is_idempotent() {
+        // Calling scaffold twice should not overwrite existing files.
+        let dir = tempfile::tempdir().unwrap();
+        Migrator::scaffold(dir.path()).unwrap();
+
+        // Overwrite the manifest with sentinel content.
+        let manifest_path = dir.path().join("migration-order.yaml");
+        std::fs::write(&manifest_path, "sentinel").unwrap();
+
+        // Second scaffold must not overwrite.
+        Migrator::scaffold(dir.path()).unwrap();
+        let content = std::fs::read_to_string(&manifest_path).unwrap();
+        assert_eq!(content, "sentinel");
+    }
+}

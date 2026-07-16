@@ -1,0 +1,20 @@
+[workspace]
+
+[package]
+name = "rust_lib_rust_bridge_reference"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.12.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+# Keep target/ lean: full debuginfo bloats the dev cache.
+[profile.dev]
+debug = false
+strip = true

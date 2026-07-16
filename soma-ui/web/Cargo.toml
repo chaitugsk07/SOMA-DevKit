@@ -1,0 +1,11 @@
+[workspace]
+members = ["packages/ui", "playground", "tools/catalog"]
+resolver = "2"
+
+[workspace.dependencies]
+leptos = { version = "^0.8", features = [] }
+leptos_router = { version = "^0.8", features = [] }
+
+[profile.dev]
+debug = false
+strip = true

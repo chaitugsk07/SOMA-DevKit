@@ -1,0 +1,12 @@
+[package]
+name = "explorer-data"
+version = "0.1.0"
+edition = "2021"
+description = "Emit migration metadata as JSON for the soma-schema explorer web UI."
+
+[dependencies]
+soma-schema = { path = "../..", default-features = false, features = ["explorer"] }
+serde_json = "1"
+
+[profile.dev]
+debug = false        # no debuginfo in dev builds — keeps target/ small; backtraces still show panic messages

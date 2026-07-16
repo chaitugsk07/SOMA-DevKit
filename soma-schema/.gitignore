@@ -1,0 +1,31 @@
+# NOTE: gitignore has no inline comments — keep notes on their own lines.
+
+# Build outputs (regenerated; never commit)
+# target/ matches Rust target dirs at any depth (website/, tools/, ...)
+/target
+target/
+# dist/ catches website/dist (Trunk); docs/public is Zola output
+dist/
+/docs/public
+node_modules/
+
+# Local tooling / caches / scratch
+/graphify-out
+/.claude
+/temp
+.mcp.json
+.graphifyignore
+.playwright-mcp/
+responsive-shots/
+screenshots/
+
+# Local databases / stray build artifacts
+*.db
+*.rlib
+
+# Secrets / environment
+.env
+*.env
+
+# OS / editor
+.DS_Store

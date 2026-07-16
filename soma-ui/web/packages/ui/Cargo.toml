@@ -1,0 +1,37 @@
+[package]
+name = "soma-ui"
+version = "0.1.1"
+edition = "2021"
+description = "A Leptos 0.8 component library: 160+ accessible UI components, blocks, charts, and a ChartDB-style schema diagram — with a prebuilt stylesheet."
+license = "Apache-2.0"
+repository = "https://github.com/chaitugsk07/soma-ui"
+homepage = "https://github.com/chaitugsk07/soma-ui"
+documentation = "https://docs.rs/soma-ui"
+readme = "README.md"
+keywords = ["leptos", "ui", "components", "wasm", "frontend"]
+categories = ["gui", "web-programming", "wasm"]
+exclude = [
+  "build-css.sh",
+]
+
+[dependencies]
+icondata = { version = "0.7.0", default-features = false, features = ["lucide"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+js-sys = "0.3.102"
+leptos = { version = "^0.8", features = ["csr"] }
+leptos_icons = "0.7.1"
+wasm-bindgen = "0.2.125"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3.102", features = [
+  "Window",
+  "Storage",
+  "MediaQueryList",
+  "EventTarget",
+  "Navigator",
+  "Clipboard",
+  "Event",
+  "Element",
+  "HtmlElement",
+  "DomRect",
+] }
