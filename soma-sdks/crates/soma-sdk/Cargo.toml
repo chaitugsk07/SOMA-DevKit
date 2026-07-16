@@ -1,0 +1,16 @@
+[package]
+name = "soma-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+soma-flags-core = { path = "../soma-flags-core" }
+soma-infra   = { path = "../../../soma-infra", default-features = false, features = ["http"] }
+reqwest   = { workspace = true }
+serde     = { workspace = true }
+serde_json = { workspace = true }
+uuid      = { workspace = true }
+anyhow    = { workspace = true }
+thiserror = { workspace = true }

@@ -858,6 +858,7 @@
 
 | Prop | Type | Notes |
 |------|------|-------|
+| id | Option<String> | optional |
 | input_type | String | default: `"text".to_string()` |
 | placeholder | String | default: `String::new()` |
 | disabled | bool | default: `false` |
@@ -979,8 +980,10 @@
 
 | Prop | Type | Notes |
 |------|------|-------|
+| id | Option<String> | optional |
 | value | RwSignal<String> | into |
 | placeholder | String | optional |
+| disabled | bool | default: `false` |
 | + children | Children | required |
 
 **Playground:** `playground/src/pages/select_page.rs`
@@ -1006,7 +1009,7 @@
 | Prop | Type | Notes |
 |------|------|-------|
 | value | String | into |
-| label | String | optional |
+| label | String | required |
 | + children | Children | required |
 
 **Playground:** `playground/src/pages/select_page.rs`
