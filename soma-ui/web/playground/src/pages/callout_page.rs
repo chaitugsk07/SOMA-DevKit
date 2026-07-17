@@ -5,7 +5,9 @@ use soma_ui::{Callout, CalloutVariant};
 fn parse_callout_variant(s: &str) -> CalloutVariant {
     match s {
         "Info" => CalloutVariant::Info,
+        "Success" => CalloutVariant::Success,
         "Warning" => CalloutVariant::Warning,
+        "Destructive" => CalloutVariant::Destructive,
         _ => CalloutVariant::Default,
     }
 }
@@ -37,7 +39,9 @@ pub fn CalloutPage() -> impl IntoView {
                     >
                         <option value="Default">"Default"</option>
                         <option value="Info">"Info"</option>
+                        <option value="Success">"Success"</option>
                         <option value="Warning">"Warning"</option>
+                        <option value="Destructive">"Destructive"</option>
                     </select>
                 </ControlRow>
             </ControlsPanel>
@@ -52,8 +56,14 @@ pub fn CalloutPage() -> impl IntoView {
                     <Callout variant=CalloutVariant::Info title="Info".to_string()>
                         <p class="text-sm text-muted-foreground">"Informational callout content."</p>
                     </Callout>
+                    <Callout variant=CalloutVariant::Success title="Success".to_string()>
+                        <p class="text-sm text-muted-foreground">"Successful callout content."</p>
+                    </Callout>
                     <Callout variant=CalloutVariant::Warning title="Warning".to_string()>
                         <p class="text-sm text-muted-foreground">"Warning callout content."</p>
+                    </Callout>
+                    <Callout variant=CalloutVariant::Destructive title="Destructive".to_string()>
+                        <p class="text-sm text-muted-foreground">"Destructive callout content."</p>
                     </Callout>
                 </div>
             </div>

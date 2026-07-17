@@ -73,6 +73,27 @@ pub fn ThemePage() -> impl IntoView {
                         </div>
                         <p class="text-xs text-muted-foreground mt-1">"success"</p>
                     </div>
+                    // warning
+                    <div>
+                        <div class="h-16 rounded-md border border-border bg-warning flex items-center justify-center">
+                            <span class="text-xs text-warning-foreground font-mono">"Aa"</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">"warning"</p>
+                    </div>
+                    // info
+                    <div>
+                        <div class="h-16 rounded-md border border-border bg-info flex items-center justify-center">
+                            <span class="text-xs text-info-foreground font-mono">"Aa"</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">"info"</p>
+                    </div>
+                    // contrast
+                    <div>
+                        <div class="h-16 rounded-md border border-border bg-contrast flex items-center justify-center">
+                            <span class="text-xs text-contrast-foreground font-mono">"Aa"</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">"contrast"</p>
+                    </div>
                     // border (just a swatch to show the border color)
                     <div>
                         <div class="h-16 rounded-md border-4 border-border bg-background flex items-center justify-center">

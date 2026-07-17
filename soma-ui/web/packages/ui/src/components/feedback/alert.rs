@@ -21,7 +21,7 @@ pub fn Alert(
         AlertVariant::Destructive => {
             "border-l-4 border-destructive/50 bg-destructive/5 text-destructive"
         }
-        AlertVariant::Success => "border-l-4 border-success bg-success/5 text-success-foreground",
+        AlertVariant::Success => "border-l-4 border-success bg-success/5 text-success",
         AlertVariant::Warning => "border-l-4 border-warning bg-warning/5 text-warning",
         AlertVariant::Info => "border-l-4 border-info bg-info/5 text-info",
     };

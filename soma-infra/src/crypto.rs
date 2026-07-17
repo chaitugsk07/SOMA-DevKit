@@ -256,6 +256,18 @@ pub fn sha256_hex(input: &[u8]) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// SHA-256 of `input`, returned as raw 32 bytes.
+///
+/// For string fingerprints use [`sha256_hex`] instead.
+/// Use this when downstream code needs the digest bytes directly (e.g. to
+/// feed into an HKDF expand step or compare against a pre-computed digest
+/// array without allocating a hex string).
+#[cfg(feature = "crypto")]
+pub fn sha256_raw(input: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(input).into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

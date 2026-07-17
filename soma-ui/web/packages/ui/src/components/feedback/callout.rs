@@ -5,7 +5,9 @@ pub enum CalloutVariant {
     #[default]
     Default,
     Info,
+    Success,
     Warning,
+    Destructive,
 }
 
 #[component]
@@ -15,14 +17,18 @@ pub fn Callout(
     #[prop(default = String::new())] class: String,
     children: Children,
 ) -> impl IntoView {
-    let (border_class, title_class) = match variant {
-        CalloutVariant::Default => ("border-border", "text-foreground"),
-        CalloutVariant::Info => ("border-blue-500", "text-blue-500"),
-        CalloutVariant::Warning => ("border-yellow-500", "text-yellow-500"),
+    let (border_class, title_class, background_class) = match variant {
+        CalloutVariant::Default => ("border-border", "text-foreground", "bg-muted/40"),
+        CalloutVariant::Info => ("border-info", "text-info", "bg-info/5"),
+        CalloutVariant::Success => ("border-success", "text-success", "bg-success/5"),
+        CalloutVariant::Warning => ("border-warning", "text-warning", "bg-warning/5"),
+        CalloutVariant::Destructive => {
+            ("border-destructive", "text-destructive", "bg-destructive/5")
+        }
     };
     let combined = format!(
-        "border-l-4 rounded-md p-4 bg-muted/40 shadow-elev-sm {} {}",
-        border_class, class
+        "border-l-4 rounded-md p-4 shadow-elev-sm {} {} {}",
+        border_class, background_class, class
     );
     view! {
         <div class=combined>

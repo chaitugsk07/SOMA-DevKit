@@ -40,7 +40,7 @@ llm = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:thiserror", "dep:tokio
 llm-tiktoken = ["llm", "dep:tiktoken-rs"]
 http = ["dep:reqwest"]
 signal = ["dep:tokio", "tokio/signal"]
-web = ["dep:axum", "dep:rust-embed", "dep:mime_guess", "dep:tokio", "tokio/net", "signal"]
+web = ["dep:axum", "dep:rust-embed", "dep:mime_guess", "dep:tokio", "tokio/net", "tokio/sync", "signal"]
 kg = ["dep:sqlx", "dep:pgvector", "dep:serde_json", "dep:uuid", "dep:thiserror"]
 # otlp: opt-in OTLP/HTTP export of traces + logs to a collector (e.g. soma-observe).
 # Set OTEL_EXPORTER_OTLP_ENDPOINT (or SOMA_OBSERVE_URL) at runtime; if neither is
@@ -86,7 +86,7 @@ reqwest = { version = "0.12", features = ["rustls-tls", "json", "stream"], optio
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 pgvector = { version = "0.4", features = ["sqlx"], optional = true }
-axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "matched-path"] }
+axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "tokio", "matched-path", "original-uri", "json"] }
 rust-embed = { version = "8", optional = true }
 mime_guess = { version = "2", optional = true }
 opentelemetry = { version = "0.32", features = ["trace", "logs", "metrics"], optional = true }
@@ -124,6 +124,12 @@ rand = "0.8"
 [[example]]
 name = "otlp_roundtrip"
 required-features = ["otlp"]
+
+# Prevent Cargo from treating this crate as a member of a parent workspace
+# when soma-infra is checked standalone (e.g. from within a suite that has its
+# own workspace at the tree root). This has no effect when soma-infra is
+# consumed as a path dependency — the parent workspace always wins there.
+[workspace]
 
 # No debuginfo in dev builds — keeps target/ small (debug builds otherwise
 # bloat to GBs). Backtraces still show panic messages, just no line numbers.

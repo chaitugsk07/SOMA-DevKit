@@ -24,7 +24,7 @@ class SomaStatus extends StatelessWidget {
       case SomaStatusKind.offline:
         dotColor = c.mutedForeground;
       case SomaStatusKind.away:
-        dotColor = const Color(0xFFEAB308);
+        dotColor = c.warning;
       case SomaStatusKind.busy:
         dotColor = c.destructive;
     }

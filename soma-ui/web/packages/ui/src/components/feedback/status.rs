@@ -18,7 +18,7 @@ pub fn Status(
     let dot_class = match kind {
         StatusKind::Online => "bg-success",
         StatusKind::Offline => "bg-muted-foreground",
-        StatusKind::Away => "bg-yellow-500",
+        StatusKind::Away => "bg-warning",
         StatusKind::Busy => "bg-destructive",
     };
     let combined = format!("inline-flex items-center gap-2 {}", class);

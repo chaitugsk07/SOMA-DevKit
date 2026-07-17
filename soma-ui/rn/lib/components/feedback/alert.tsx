@@ -2,12 +2,14 @@ import { View, Text } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils/cn';
 
-const alertVariants = cva('rounded-lg border p-4', {
+const alertVariants = cva('rounded-lg border border-l-4 p-4 shadow-sm', {
   variants: {
     variant: {
       default: 'border-border bg-card',
       destructive: 'border-destructive bg-destructive/10',
       success: 'border-success bg-success/10',
+      warning: 'border-warning bg-warning/10',
+      info: 'border-info bg-info/10',
     },
   },
   defaultVariants: { variant: 'default' },
@@ -17,6 +19,8 @@ const titleColor = {
   default: 'text-foreground',
   destructive: 'text-destructive',
   success: 'text-success',
+  warning: 'text-warning',
+  info: 'text-info',
 } as const;
 
 export type AlertProps = VariantProps<typeof alertVariants> & {

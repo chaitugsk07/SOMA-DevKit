@@ -98,12 +98,14 @@ class GettingStartedPage extends StatelessWidget {
                 children: [
                   Icon(LucideIcons.chevronRight, size: 16, color: c.mutedForeground),
                   const SizedBox(width: 8),
-                  Text(
-                    'Pick a component from the sidebar to explore.',
-                    style: TextStyle(
-                      fontFamily: 'Outfit',
-                      fontSize: 13,
-                      color: c.mutedForeground,
+                  Expanded(
+                    child: Text(
+                      'Pick a component from the sidebar to explore.',
+                      style: TextStyle(
+                        fontFamily: 'Outfit',
+                        fontSize: 13,
+                        color: c.mutedForeground,
+                      ),
                     ),
                   ),
                 ],

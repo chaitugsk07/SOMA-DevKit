@@ -174,6 +174,12 @@ pub struct OpenAICompatibleAdapter {
     /// Required for o-series / Azure AI Foundry models that reject the
     /// standard `max_tokens` field (e.g. gpt-5.6-sol).  Default: false.
     pub(crate) use_max_completion_tokens: bool,
+    /// When true, sends `api-key: {key}` instead of `Authorization: Bearer {key}`.
+    ///
+    /// Required for Azure OpenAI endpoints, which expect the credential in the
+    /// `api-key` header rather than the standard `Authorization: Bearer` scheme.
+    /// Default: false.
+    pub(crate) use_azure_auth: bool,
 }
 
 impl std::fmt::Debug for OpenAICompatibleAdapter {
@@ -183,6 +189,7 @@ impl std::fmt::Debug for OpenAICompatibleAdapter {
             .field("api_key", &self.api_key.as_ref().map(|_| "***"))
             .field("api_version", &self.api_version)
             .field("use_max_completion_tokens", &self.use_max_completion_tokens)
+            .field("use_azure_auth", &self.use_azure_auth)
             .finish()
     }
 }
@@ -209,6 +216,7 @@ impl OpenAICompatibleAdapter {
             api_key,
             api_version: None,
             use_max_completion_tokens: false,
+            use_azure_auth: false,
         })
     }
 
@@ -224,6 +232,15 @@ impl OpenAICompatibleAdapter {
     /// that reject the standard `max_tokens` field.  Default: `false`.
     pub fn with_max_completion_tokens(mut self, yes: bool) -> Self {
         self.use_max_completion_tokens = yes;
+        self
+    }
+
+    /// Use Azure OpenAI auth (`api-key: {key}` header instead of `Authorization: Bearer {key}`).
+    ///
+    /// Set to `true` when targeting an Azure OpenAI deployment URL. Default: `false`.
+    /// The adapter must be constructed with a non-`None` `api_key` when Azure auth is enabled.
+    pub fn with_azure_auth(mut self, yes: bool) -> Self {
+        self.use_azure_auth = yes;
         self
     }
 
@@ -249,6 +266,14 @@ impl OpenAICompatibleAdapter {
         match &self.api_key {
             Some(k) => format!("Bearer {k}"),
             None => "Bearer ollama".to_string(),
+        }
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        if self.use_azure_auth {
+            req.header("api-key", self.api_key.as_deref().unwrap_or(""))
+        } else {
+            req.header("Authorization", &self.auth_header())
         }
     }
 
@@ -332,9 +357,7 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
         };
 
         let resp = self
-            .http
-            .post(self.chat_url())
-            .header("Authorization", &self.auth_header())
+            .apply_auth(self.http.post(self.chat_url()))
             .json(&body)
             .send()
             .await
@@ -426,6 +449,13 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
             (Some(req.max_tokens), None)
         };
 
+        // Azure api-versions before 2024-02-01 reject stream_options with HTTP 400.
+        // Omit it when use_azure_auth is true to restore the exact pre-migration behavior.
+        let stream_options = if self.use_azure_auth {
+            None
+        } else {
+            Some(OaiStreamOptions { include_usage: true })
+        };
         let body = OaiRequest {
             model: req.model.clone(),
             messages,
@@ -435,15 +465,11 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
             max_tokens,
             max_completion_tokens,
             stream: true,
-            stream_options: Some(OaiStreamOptions {
-                include_usage: true,
-            }),
+            stream_options,
         };
 
         let resp = self
-            .http
-            .post(self.chat_url())
-            .header("Authorization", &self.auth_header())
+            .apply_auth(self.http.post(self.chat_url()))
             .json(&body)
             .send()
             .await
@@ -558,9 +584,7 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
         };
 
         let resp = self
-            .http
-            .post(self.embed_url())
-            .header("Authorization", &self.auth_header())
+            .apply_auth(self.http.post(self.embed_url()))
             .json(&body)
             .send()
             .await
@@ -709,6 +733,7 @@ mod tests {
             api_key: Some("sk-test".to_string()),
             api_version: None,
             use_max_completion_tokens: false,
+            use_azure_auth: false,
         }
     }
 
@@ -1097,5 +1122,54 @@ data: [DONE]\n\
             }
             other => panic!("last event should be Done, got {:?}", other),
         }
+    }
+
+    // ── stream_options / Azure conditional ───────────────────────────────────
+
+    #[test]
+    fn stream_options_absent_in_azure_mode() {
+        // When use_azure_auth=true the serialized body must NOT contain
+        // stream_options — Azure api-versions < 2024-02-01 reject the field.
+        let body = OaiRequest {
+            model: "gpt-4o".to_string(),
+            messages: vec![],
+            tools: None,
+            temperature: None,
+            top_p: None,
+            max_tokens: Some(256),
+            max_completion_tokens: None,
+            stream: true,
+            stream_options: None, // azure path sets None
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            !json.contains("stream_options"),
+            "azure mode must not serialize stream_options: {json}"
+        );
+    }
+
+    #[test]
+    fn stream_options_present_in_non_azure_mode() {
+        // Non-azure path keeps include_usage=true for accurate billing telemetry.
+        let body = OaiRequest {
+            model: "gpt-4o".to_string(),
+            messages: vec![],
+            tools: None,
+            temperature: None,
+            top_p: None,
+            max_tokens: Some(256),
+            max_completion_tokens: None,
+            stream: true,
+            stream_options: Some(OaiStreamOptions { include_usage: true }),
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"stream_options\""),
+            "non-azure mode must serialize stream_options: {json}"
+        );
+        assert!(
+            json.contains("\"include_usage\":true"),
+            "stream_options.include_usage must be true: {json}"
+        );
     }
 }

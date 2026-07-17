@@ -43,15 +43,14 @@ class SomaAlert extends StatelessWidget {
         borderColor = c.success.withAlpha(100);
         iconData = LucideIcons.circleCheck;
       case SomaAlertVariant.warning:
-        const amber = Color(0xFFEAB308);
-        accentColor = amber;
-        bgColor = amber.withAlpha(18);
-        borderColor = amber.withAlpha(100);
+        accentColor = c.warning;
+        bgColor = c.warning.withAlpha(18);
+        borderColor = c.warning.withAlpha(100);
         iconData = LucideIcons.triangleAlert;
       case SomaAlertVariant.info:
-        accentColor = c.primary;
-        bgColor = c.primary.withAlpha(18);
-        borderColor = c.primary.withAlpha(100);
+        accentColor = c.info;
+        bgColor = c.info.withAlpha(18);
+        borderColor = c.info.withAlpha(100);
         iconData = LucideIcons.info;
     }
 

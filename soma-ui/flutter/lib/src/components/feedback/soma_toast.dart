@@ -170,10 +170,10 @@ class _ToastCardState extends State<_ToastCard>
         accentColor = c.destructive;
         iconData = LucideIcons.circleX;
       case SomaToastVariant.warning:
-        accentColor = const Color(0xFFEAB308);
+        accentColor = c.warning;
         iconData = LucideIcons.triangleAlert;
       case SomaToastVariant.info:
-        accentColor = c.primary;
+        accentColor = c.info;
         iconData = LucideIcons.info;
     }
 

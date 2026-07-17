@@ -11,6 +11,8 @@ export function AlertScreen() {
           <Alert title="Heads up" description="This is a default alert." />
           <Alert variant="destructive" title="Error" description="Something went wrong." />
           <Alert variant="success" title="Success" description="Saved successfully." />
+          <Alert variant="warning" title="Warning" description="Review this before continuing." />
+          <Alert variant="info" title="Information" description="A new version is available." />
         </View>
       </Demo>
     </ComponentPage>

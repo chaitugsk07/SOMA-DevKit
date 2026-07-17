@@ -29,9 +29,9 @@ class SomaCallout extends StatelessWidget {
 
     switch (variant) {
       case SomaCalloutVariant.info:
-        borderColor = c.primary;
-        accentColor = c.primary;
-        bgColor = c.primary.withAlpha(18);
+        borderColor = c.info;
+        accentColor = c.info;
+        bgColor = c.info.withAlpha(18);
         defaultIcon = LucideIcons.info;
       case SomaCalloutVariant.success:
         borderColor = c.success;
@@ -39,10 +39,9 @@ class SomaCallout extends StatelessWidget {
         bgColor = c.success.withAlpha(18);
         defaultIcon = LucideIcons.circleCheck;
       case SomaCalloutVariant.warning:
-        const amber = Color(0xFFEAB308);
-        borderColor = amber;
-        accentColor = amber;
-        bgColor = amber.withAlpha(18);
+        borderColor = c.warning;
+        accentColor = c.warning;
+        bgColor = c.warning.withAlpha(18);
         defaultIcon = LucideIcons.triangleAlert;
       case SomaCalloutVariant.destructive:
         borderColor = c.destructive;

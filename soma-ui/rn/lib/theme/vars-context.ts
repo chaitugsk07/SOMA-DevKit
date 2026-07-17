@@ -13,7 +13,7 @@ import { lightVars } from './tokens';
  */
 export type ThemeVarsRecord = { [K in keyof typeof lightVars]: string };
 
-/** Falls back to Palantir lightVars if no provider is above. */
+/** Falls back to the base Soma light theme if no provider is above. */
 export const ThemeVarsContext = createContext<ThemeVarsRecord>(lightVars as ThemeVarsRecord);
 
 export function useThemeVars(): ThemeVarsRecord {

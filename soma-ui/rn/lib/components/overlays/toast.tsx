@@ -4,7 +4,7 @@ import { AnimatePresence, MotiView } from 'moti';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
 
-type ToastVariant = 'default' | 'destructive' | 'success';
+type ToastVariant = 'default' | 'destructive' | 'success' | 'warning' | 'info';
 type Toast = { id: number; title: string; description?: string; variant: ToastVariant };
 
 type ToastContextValue = {
@@ -23,6 +23,16 @@ const border: Record<ToastVariant, string> = {
   default: 'border-border',
   destructive: 'border-destructive',
   success: 'border-success',
+  warning: 'border-warning',
+  info: 'border-info',
+};
+
+const titleColor: Record<ToastVariant, string> = {
+  default: 'text-card-foreground',
+  destructive: 'text-destructive',
+  success: 'text-success',
+  warning: 'text-warning',
+  info: 'text-info',
 };
 
 let nextId = 0;
@@ -52,9 +62,9 @@ export function ToastProvider({ children, duration = 3000 }: { children: ReactNo
               animate={{ opacity: 1, translateY: 0 }}
               exit={{ opacity: 0, translateY: 20 }}
               transition={{ type: 'timing', duration: 200 }}
-              className={cn('w-full max-w-md rounded-lg border bg-card p-4 shadow', border[t.variant])}
+              className={cn('w-full max-w-md rounded-lg border border-l-4 bg-card p-4 shadow', border[t.variant])}
             >
-              <Text className="font-heading-semibold text-sm text-card-foreground">{t.title}</Text>
+              <Text className={cn('font-heading-semibold text-sm', titleColor[t.variant])}>{t.title}</Text>
               {t.description && (
                 <Text className="mt-0.5 font-body text-xs text-muted-foreground">{t.description}</Text>
               )}

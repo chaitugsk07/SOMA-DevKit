@@ -23,6 +23,7 @@
 
 pub mod adapter;
 pub mod anthropic;
+pub mod azure;
 pub mod openai;
 pub mod router;
 pub mod tokens;

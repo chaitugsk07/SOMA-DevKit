@@ -41,6 +41,16 @@ export function ToastScreen() {
           label="Error"
           onPress={() => toast({ title: 'Failed', description: 'Something went wrong.', variant: 'destructive' })}
         />
+        <Button
+          variant="outline"
+          label="Warning"
+          onPress={() => toast({ title: 'Action needed', description: 'Review the pending changes.', variant: 'warning' })}
+        />
+        <Button
+          variant="ghost"
+          label="Info"
+          onPress={() => toast({ title: 'Update available', description: 'A new version is ready.', variant: 'info' })}
+        />
       </Demo>
     </ComponentPage>
   );

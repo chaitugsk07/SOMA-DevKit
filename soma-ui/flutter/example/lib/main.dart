@@ -409,33 +409,45 @@ class _SidebarContentState extends State<_SidebarContent> {
           padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
           child: Row(
             children: [
-              Text(
-                'soma_ui',
-                style: TextStyle(
-                  fontFamily: 'Rajdhani',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: c.foreground,
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'soma_ui',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'Rajdhani',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: c.foreground,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
+                      decoration: BoxDecoration(
+                        color: c.primary,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '0.1',
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: c.primaryForeground,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
-                decoration: BoxDecoration(
-                  color: c.primary,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '0.1',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    color: c.primaryForeground,
-                  ),
-                ),
+              SomaThemeToggle(
+                isDark: widget.isDark,
+                onChanged: (_) => widget.onToggleTheme(),
               ),
-              const Spacer(),
-              SomaThemeToggle(isDark: widget.isDark, onChanged: (_) => widget.onToggleTheme()),
             ],
           ),
         ),

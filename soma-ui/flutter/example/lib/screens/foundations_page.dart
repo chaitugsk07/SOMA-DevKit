@@ -50,6 +50,9 @@ class FoundationsPage extends StatelessWidget {
                 ('primary', c.primary, c.primaryForeground),
                 ('destructive', c.destructive, c.destructiveForeground),
                 ('success', c.success, c.successForeground),
+                ('warning', c.warning, c.warningForeground),
+                ('info', c.info, c.infoForeground),
+                ('contrast', c.contrast, c.contrastForeground),
                 ('border', c.border, c.foreground),
               ];
               return Wrap(

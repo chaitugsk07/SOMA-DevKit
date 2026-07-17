@@ -95,10 +95,10 @@ pub fn SonnerToaster(children: ChildrenFn) -> impl IntoView {
                                     <Icon icon=Signal::derive(|| icondata::LuX) width="15" height="15" attr:class="text-destructive shrink-0" />
                                 }.into_any(), "text-foreground"),
                                 SonnerVariant::Warning => (view! {
-                                    <Icon icon=Signal::derive(|| icondata::LuTriangleAlert) width="15" height="15" attr:class="text-yellow-500 shrink-0" />
+                                    <Icon icon=Signal::derive(|| icondata::LuTriangleAlert) width="15" height="15" attr:class="text-warning shrink-0" />
                                 }.into_any(), "text-foreground"),
                                 SonnerVariant::Info => (view! {
-                                    <Icon icon=Signal::derive(|| icondata::LuInfo) width="15" height="15" attr:class="text-blue-500 shrink-0" />
+                                    <Icon icon=Signal::derive(|| icondata::LuInfo) width="15" height="15" attr:class="text-info shrink-0" />
                                 }.into_any(), "text-foreground"),
                             };
                             let message = item.message.clone();

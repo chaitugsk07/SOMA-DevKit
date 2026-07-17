@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-// Palantir tokens ported from soma-ui web/theme/tokens.css.
+// Tokens ported from soma-ui web/theme/tokens.css.
 // Colors resolve from CSS vars set per-theme by lib/theme (NativeWind vars()).
 module.exports = {
   presets: [require('nativewind/preset')],
@@ -36,6 +36,18 @@ module.exports = {
         success: {
           DEFAULT: 'hsl(var(--success))',
           foreground: 'hsl(var(--success-foreground))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))',
+        },
+        contrast: {
+          DEFAULT: 'hsl(var(--contrast))',
+          foreground: 'hsl(var(--contrast-foreground))',
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

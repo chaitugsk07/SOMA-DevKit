@@ -17,7 +17,7 @@ const tones: Record<StatusTone, { dot: string; text: string; bg: string }> = {
   neutral: { dot: 'bg-muted-foreground', text: 'text-muted-foreground', bg: 'bg-muted' },
   active: { dot: 'bg-primary', text: 'text-primary', bg: 'bg-primary/10' },
   success: { dot: 'bg-success', text: 'text-success', bg: 'bg-success/10' },
-  warning: { dot: 'bg-destructive', text: 'text-destructive', bg: 'bg-destructive/10' },
+  warning: { dot: 'bg-warning', text: 'text-warning', bg: 'bg-warning/10' },
 };
 
 /** Status label with a colored (optionally pulsing) dot. */
