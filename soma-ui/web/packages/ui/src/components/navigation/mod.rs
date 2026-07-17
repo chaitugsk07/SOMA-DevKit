@@ -12,3 +12,5 @@ pub mod sidebar;
 pub use sidebar::*;
 pub mod product_switcher;
 pub use product_switcher::*;
+pub mod step_rail;
+pub use step_rail::*;

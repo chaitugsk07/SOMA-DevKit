@@ -124,6 +124,28 @@
 
 **Playground:** `playground/src/pages/card_page.rs`
 
+### ChatThread
+
+**Import:** `use soma_ui::ChatThread;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| messages | Vec<ChatMsg> | required |
+| class | String | default: `String::new()` |
+
+### ChatMessage
+
+**Import:** `use soma_ui::ChatMessage;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| role | String | into |
+| + children | Children | required |
+
 ### Chip
 
 **Import:** `use soma_ui::Chip;`
@@ -201,6 +223,16 @@
 | selectable | bool | default: `false` |
 | filterable | bool | default: `false` |
 | page_size | usize | default: `0usize` |
+| density | TableDensity | default: `TableDensity::Comfortable` |
+| sticky_header | bool | default: `false` |
+| loading | bool | default: `false` |
+| error | Option<String> | optional |
+| filter_placeholder | String | default: `"Filter resources…".to_string(), into` |
+| empty_message | String | default: `"No resources yet.".to_string(), into` |
+| no_results_message | String | required |
+| toolbar | Option<ChildrenFn> | optional |
+| cell_renderer | Option<DataCellRenderer> | optional |
+| on_selection_change | Option<Callback<Vec<usize>>> | optional |
 
 **Playground:** `playground/src/pages/data_table_page.rs`
 
@@ -218,6 +250,28 @@
 | class | String | default: `String::new()` |
 
 **Playground:** `playground/src/pages/empty_page.rs`
+
+### Eyebrow
+
+**Import:** `use soma_ui::Eyebrow;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| class | String | default: `String::new()` |
+| + children | Children | required |
+
+### InlineCode
+
+**Import:** `use soma_ui::InlineCode;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| class | String | default: `String::new()` |
+| + children | Children | required |
 
 ### Item
 
@@ -243,6 +297,17 @@
 
 **Playground:** `playground/src/pages/kbd_page.rs`
 
+### PropertyList
+
+**Import:** `use soma_ui::PropertyList;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| items | Vec<PropertyRow> | required |
+| class | String | default: `String::new()` |
+
 ### SchemaDiagram
 
 **Import:** `use soma_ui::SchemaDiagram;`
@@ -256,6 +321,18 @@
 | class | String | default: `String::new()` |
 
 **Playground:** `playground/src/pages/schema_diagram_page.rs`
+
+### SelectableList
+
+**Import:** `use soma_ui::SelectableList;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| items | Vec<SelectableItem> | required |
+| selected | RwSignal<Option<String>> | required |
+| class | String | default: `String::new()` |
 
 ### Stat
 
@@ -511,7 +588,7 @@
 **Import:** `use soma_ui::Callout;`
 
 **Enums:**
-- `CalloutVariant`: Default*, Info, Warning
+- `CalloutVariant`: Default*, Info, Success, Warning, Destructive
 
 **Props:**
 
@@ -678,6 +755,18 @@
 
 **Playground:** `playground/src/pages/field_page.rs`
 
+### FilterRail
+
+**Import:** `use soma_ui::FilterRail;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| live_label | Option<String> | optional |
+| class | String | default: `String::new()` |
+| + children | Children | required |
+
 ### Form
 
 **Import:** `use soma_ui::Form;`
@@ -754,6 +843,20 @@
 | + children | Children | required |
 
 **Playground:** `playground/src/pages/label_page.rs`
+
+### SettingRow
+
+**Import:** `use soma_ui::SettingRow;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| checked | RwSignal<bool> | required |
+| label | String | into |
+| description | Option<String> | optional |
+| badge | Option<String> | optional |
+| class | String | default: `String::new()` |
 
 ## Inputs
 
@@ -849,6 +952,20 @@
 | placeholder | String | optional |
 
 **Playground:** `playground/src/pages/date_picker_page.rs`
+
+### FileButton
+
+**Import:** `use soma_ui::FileButton;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| accept | Option<String> | optional |
+| on_file | Callback<File> | required |
+| disabled | bool | default: `false` |
+| class | String | default: `String::new()` |
+| + children | Children | required |
 
 ### Input
 
@@ -1136,6 +1253,19 @@
 
 ## Layout
 
+### AppShell
+
+**Import:** `use soma_ui::AppShell;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| sidebar | AnyView | required |
+| header_end | Option<AnyView> | optional |
+| class | String | default: `String::new()` |
+| + children | Children | required |
+
 ### AspectRatio
 
 **Import:** `use soma_ui::AspectRatio;`
@@ -1150,6 +1280,34 @@
 
 **Playground:** `playground/src/pages/aspect_ratio_page.rs`
 
+### ConsoleShell
+
+**Import:** `use soma_ui::ConsoleShell;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| brand | String | into |
+| version | Option<String> | optional |
+| sidebar | ChildrenFn | required |
+| topbar | ChildrenFn | required |
+| sidebar_footer | Option<ChildrenFn> | optional |
+| class | String | default: `String::new()` |
+| + children | Children | required |
+
+### MasterDetail
+
+**Import:** `use soma_ui::MasterDetail;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| class | String | default: `String::new()` |
+| list | AnyView | required |
+| detail | AnyView | required |
+
 ### PageHeader
 
 **Import:** `use soma_ui::PageHeader;`
@@ -1160,11 +1318,25 @@
 |------|------|-------|
 | title | String | into |
 | subtitle | Option<String> | default: `None` |
+| eyebrow | Option<String> | optional |
 | back_slot | Option<AnyView> | optional |
+| children | Option<Children> | optional |
 | class | String | default: `String::new()` |
-| + children | Children | required |
 
 **Playground:** `playground/src/pages/page_header_page.rs`
+
+### SaveBar
+
+**Import:** `use soma_ui::SaveBar;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| message | Option<String> | optional |
+| description | Option<String> | optional |
+| class | String | default: `String::new()` |
+| + children | Children | required |
 
 ### ScrollArea
 
@@ -1178,6 +1350,30 @@
 | + children | Children | required |
 
 **Playground:** `playground/src/pages/scroll_area_page.rs`
+
+### SectionDivider
+
+**Import:** `use soma_ui::SectionDivider;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| label | Option<String> | optional |
+| class | String | default: `String::new()` |
+
+### SectionHeader
+
+**Import:** `use soma_ui::SectionHeader;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| title | String | into |
+| eyebrow | Option<String> | optional |
+| class | String | default: `String::new()` |
+| children | Option<Children> | optional |
 
 ### Separator
 
@@ -1194,6 +1390,19 @@
 | class | String | default: `String::new()` |
 
 **Playground:** `playground/src/pages/separator_page.rs`
+
+### SplitPanel
+
+**Import:** `use soma_ui::SplitPanel;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| left_width | String | default: `String::from("330px")` |
+| class | String | default: `String::new()` |
+| left | AnyView | required |
+| right | AnyView | required |
 
 ## Media
 
@@ -1541,6 +1750,18 @@
 | class | String | default: `String::new()` |
 
 **Playground:** `playground/src/pages/sidebar_page.rs`
+
+### StepRail
+
+**Import:** `use soma_ui::StepRail;`
+
+**Props:**
+
+| Prop | Type | Notes |
+|------|------|-------|
+| steps | Vec<String> | required |
+| active | usize | required |
+| class | String | default: `String::new()` |
 
 ### Tabs
 

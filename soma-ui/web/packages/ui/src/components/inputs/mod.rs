@@ -36,3 +36,5 @@ pub mod input_phone;
 pub use input_phone::*;
 pub mod input_prompt;
 pub use input_prompt::*;
+pub mod file_button;
+pub use file_button::*;
