@@ -1,8 +1,14 @@
 use crate::components::shared::{CONTROL_MOTION, FOCUS_RING};
 use crate::icons::{icondata, Icon};
-use crate::{Pagination, Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use crate::{
+    Pagination, Table, TableBody, TableCell, TableDensity, TableHead, TableHeader, TableRow,
+};
 use leptos::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+pub type DataCellRenderer =
+    Arc<dyn Fn(&str, &str, &HashMap<String, String>) -> AnyView + Send + Sync>;
 
 #[derive(Clone, Debug)]
 pub struct Column {
@@ -19,6 +25,17 @@ pub fn DataTable(
     #[prop(default = false)] selectable: bool,
     #[prop(default = false)] filterable: bool,
     #[prop(default = 0usize)] page_size: usize,
+    #[prop(default = TableDensity::Comfortable)] density: TableDensity,
+    #[prop(default = false)] sticky_header: bool,
+    #[prop(default = false)] loading: bool,
+    #[prop(optional, into)] error: Option<String>,
+    #[prop(default = "Filter resources…".to_string(), into)] filter_placeholder: String,
+    #[prop(default = "No resources yet.".to_string(), into)] empty_message: String,
+    #[prop(default = "No resources match your filters.".to_string(), into)]
+    no_results_message: String,
+    #[prop(optional)] toolbar: Option<ChildrenFn>,
+    #[prop(optional)] cell_renderer: Option<DataCellRenderer>,
+    #[prop(optional)] on_selection_change: Option<Callback<Vec<usize>>>,
 ) -> impl IntoView {
     let filter = RwSignal::new(String::new());
     // (col_key, ascending)
@@ -28,6 +45,12 @@ pub fn DataTable(
 
     let cols = StoredValue::new(columns);
     let all_rows = StoredValue::new(rows);
+    let toolbar = StoredValue::new(toolbar);
+    let cell_renderer = StoredValue::new(cell_renderer);
+    let error = StoredValue::new(error);
+    let filter_placeholder = StoredValue::new(filter_placeholder);
+    let empty_message = StoredValue::new(empty_message);
+    let no_results_message = StoredValue::new(no_results_message);
 
     // Derived: filtered + sorted rows (with original index)
     let processed = Memo::new(move |_| {
@@ -102,19 +125,37 @@ pub fn DataTable(
         page_rows.iter().all(|(i, _)| sel.contains(i))
     });
 
+    let notify_selection = move || {
+        if let Some(callback) = on_selection_change {
+            let mut indices = selected.get_untracked().into_iter().collect::<Vec<_>>();
+            indices.sort_unstable();
+            callback.run(indices);
+        }
+    };
+
     view! {
         <div class="space-y-3">
-            {move || filterable.then(|| view! {
-                <input
-                    class=format!("flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground {} {}", CONTROL_MOTION, FOCUS_RING)
-                    type="text"
-                    placeholder="Filter…"
-                    prop:value=move || filter.get()
-                    on:input=move |e| filter.set(event_target_value(&e))
-                />
+            {(filterable || toolbar.with_value(|content| content.is_some())).then(|| view! {
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    {filterable.then(|| view! {
+                        <div class="w-full sm:max-w-sm">
+                            <input
+                                class=format!("flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground {} {}", CONTROL_MOTION, FOCUS_RING)
+                                type="search"
+                                placeholder=filter_placeholder.get_value()
+                                prop:value=move || filter.get()
+                                on:input=move |e| {
+                                    filter.set(event_target_value(&e));
+                                    current_page.set(1);
+                                }
+                            />
+                        </div>
+                    })}
+                    {toolbar.with_value(|content| content.as_ref().map(|render| render()))}
+                </div>
             })}
 
-            <Table>
+            <Table density=density sticky_header=sticky_header>
                 <TableHeader>
                     <TableRow>
                         {move || selectable.then(|| {
@@ -124,6 +165,7 @@ pub fn DataTable(
                                     <input
                                         type="checkbox"
                                         class="h-4 w-4 cursor-pointer accent-primary"
+                                        aria-label="Select all rows on this page"
                                         prop:checked=move || all_selected.get()
                                         on:change=move |_| {
                                             let page_rows = paged.get_untracked();
@@ -134,6 +176,7 @@ pub fn DataTable(
                                                     for (i, _) in &page_rows { sel.insert(*i); }
                                                 }
                                             });
+                                            notify_selection();
                                         }
                                     />
                                 </TableHead>
@@ -189,48 +232,98 @@ pub fn DataTable(
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    <For
-                        each=move || paged.get()
-                        key=|(i, _)| *i
-                        children=move |(orig_idx, row)| {
-                            let row_stored = StoredValue::new(row);
+                    {move || {
+                        let column_count = cols.with_value(|value| value.len()) + usize::from(selectable);
+                        if loading {
                             view! {
                                 <TableRow>
-                                    {move || selectable.then(|| {
-                                        view! {
-                                            <TableCell class="w-10".to_string()>
-                                                <input
-                                                    type="checkbox"
-                                                    class="h-4 w-4 cursor-pointer accent-primary"
-                                                    prop:checked=move || selected.get().contains(&orig_idx)
-                                                    on:change=move |_| {
-                                                        selected.update(|sel| {
-                                                            if sel.contains(&orig_idx) {
-                                                                sel.remove(&orig_idx);
-                                                            } else {
-                                                                sel.insert(orig_idx);
-                                                            }
-                                                        });
-                                                    }
-                                                />
-                                            </TableCell>
-                                        }
-                                    })}
-                                    {move || {
-                                        let row = row_stored.get_value();
-                                        cols.get_value().into_iter().map(|col| {
-                                            let val = row.get(&col.key).cloned().unwrap_or_default();
-                                            view! { <TableCell>{val}</TableCell> }
-                                        }).collect::<Vec<_>>()
-                                    }}
+                                    <td colspan=column_count class="p-8 text-center">
+                                        <div class="flex items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+                                            <span class="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+                                            "Loading resources…"
+                                        </div>
+                                    </td>
                                 </TableRow>
-                            }
+                            }.into_any()
+                        } else if let Some(message) = error.get_value() {
+                            view! {
+                                <TableRow>
+                                    <td colspan=column_count class="p-8 text-center">
+                                        <div class="text-sm text-destructive" role="alert">{message}</div>
+                                    </td>
+                                </TableRow>
+                            }.into_any()
+                        } else if all_rows.with_value(|value| value.is_empty()) {
+                            let message = empty_message.get_value();
+                            view! {
+                                <TableRow>
+                                    <td colspan=column_count class="p-8 text-center text-sm text-muted-foreground">
+                                        {message}
+                                    </td>
+                                </TableRow>
+                            }.into_any()
+                        } else if paged.get().is_empty() {
+                            let message = no_results_message.get_value();
+                            view! {
+                                <TableRow>
+                                    <td colspan=column_count class="p-8 text-center text-sm text-muted-foreground">
+                                        {message}
+                                    </td>
+                                </TableRow>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <For
+                                    each=move || paged.get()
+                                    key=|(i, _)| *i
+                                    children=move |(orig_idx, row)| {
+                                        let row_stored = StoredValue::new(row);
+                                        view! {
+                                            <TableRow>
+                                                {move || selectable.then(|| {
+                                                    view! {
+                                                        <TableCell class="w-10".to_string()>
+                                                            <input
+                                                                type="checkbox"
+                                                                class="h-4 w-4 cursor-pointer accent-primary"
+                                                                aria-label="Select row"
+                                                                prop:checked=move || selected.get().contains(&orig_idx)
+                                                                on:change=move |_| {
+                                                                    selected.update(|sel| {
+                                                                        if sel.contains(&orig_idx) {
+                                                                            sel.remove(&orig_idx);
+                                                                        } else {
+                                                                            sel.insert(orig_idx);
+                                                                        }
+                                                                    });
+                                                                    notify_selection();
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                    }
+                                                })}
+                                                {move || {
+                                                    let row = row_stored.get_value();
+                                                    cols.get_value().into_iter().map(|col| {
+                                                        let value = row.get(&col.key).cloned().unwrap_or_default();
+                                                        let rendered = cell_renderer.with_value(|renderer| {
+                                                            renderer.as_ref().map(|render| render(&col.key, &value, &row))
+                                                        });
+                                                        let content = rendered.unwrap_or_else(|| view! { <>{value}</> }.into_any());
+                                                        view! { <TableCell>{content}</TableCell> }
+                                                    }).collect::<Vec<_>>()
+                                                }}
+                                            </TableRow>
+                                        }
+                                    }
+                                />
+                            }.into_any()
                         }
-                    />
+                    }}
                 </TableBody>
             </Table>
 
-            {move || (page_size > 0 && total_pages.get() > 1).then(|| {
+            {move || (!loading && error.get_value().is_none() && page_size > 0 && total_pages.get() > 1).then(|| {
                 view! {
                     <div class="flex justify-end">
                         <Pagination page=current_page total_pages=total_pages.get() />

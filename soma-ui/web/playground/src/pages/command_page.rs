@@ -18,7 +18,7 @@ pub fn CommandPage() -> impl IntoView {
     view! {
         <PageShell
             title=Signal::derive(|| "Command".to_string())
-            subtitle=Signal::derive(|| "Command palette with search filtering. Open with the button or Ctrl/⌘ K.".to_string())
+            subtitle=Signal::derive(|| "Searchable command palette with arrow-key navigation and Enter selection. Open with the button or Ctrl/⌘ K.".to_string())
         >
             <div class="bg-card border border-border rounded-md p-6 md:p-12 flex flex-col items-center justify-center gap-4 min-h-72">
                 <Button on:click=move |_| open.set(true)>

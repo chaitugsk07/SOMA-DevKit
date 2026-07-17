@@ -19,7 +19,7 @@ pub fn DashboardScreenPage() -> impl IntoView {
                     <span class="w-3 h-3 rounded-full bg-border"></span>
                     <span class="w-3 h-3 rounded-full bg-border"></span>
                     <div class="ms-3 flex-1 max-w-xs h-5 rounded bg-background/60 border border-border flex items-center px-2">
-                        <span class="text-xs text-muted-foreground font-mono">"foundry.io/dashboard"</span>
+                        <span class="text-xs text-muted-foreground font-mono">"console.soma.dev/overview"</span>
                     </div>
                 </div>
                 <div class="h-[640px] overflow-auto">

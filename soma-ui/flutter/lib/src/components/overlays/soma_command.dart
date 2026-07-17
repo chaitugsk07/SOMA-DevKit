@@ -61,6 +61,7 @@ class _CommandDialog extends StatefulWidget {
 class _CommandDialogState extends State<_CommandDialog> {
   final TextEditingController _ctrl = TextEditingController();
   String _filter = '';
+  int _selectedIndex = 0;
 
   @override
   void dispose() {
@@ -88,15 +89,42 @@ class _CommandDialogState extends State<_CommandDialog> {
   Widget build(BuildContext context) {
     final c = SomaTheme.of(context);
     final filtered = _filtered;
+    final visibleItems = filtered.expand((group) => group.items).toList();
     final screenWidth = MediaQuery.of(context).size.width;
     final maxW = min(screenWidth * 0.9, 640.0);
+    var itemIndex = 0;
 
     return Focus(
       autofocus: true,
       onKeyEvent: (node, e) {
-        if (e is KeyDownEvent &&
-            e.logicalKey == LogicalKeyboardKey.escape) {
+        if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape) {
           Navigator.of(context).pop();
+          return KeyEventResult.handled;
+        }
+        if (e is KeyDownEvent &&
+            e.logicalKey == LogicalKeyboardKey.arrowDown &&
+            visibleItems.isNotEmpty) {
+          setState(() {
+            _selectedIndex = (_selectedIndex + 1) % visibleItems.length;
+          });
+          return KeyEventResult.handled;
+        }
+        if (e is KeyDownEvent &&
+            e.logicalKey == LogicalKeyboardKey.arrowUp &&
+            visibleItems.isNotEmpty) {
+          setState(() {
+            _selectedIndex = (_selectedIndex - 1 + visibleItems.length) %
+                visibleItems.length;
+          });
+          return KeyEventResult.handled;
+        }
+        if (e is KeyDownEvent &&
+            e.logicalKey == LogicalKeyboardKey.enter &&
+            visibleItems.isNotEmpty) {
+          final item =
+              visibleItems[_selectedIndex.clamp(0, visibleItems.length - 1)];
+          Navigator.of(context).pop();
+          item.onSelect?.call();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -163,7 +191,10 @@ class _CommandDialogState extends State<_CommandDialog> {
                               contentPadding: EdgeInsets.zero,
                             ),
                             cursorColor: c.ring,
-                            onChanged: (v) => setState(() => _filter = v),
+                            onChanged: (v) => setState(() {
+                              _filter = v;
+                              _selectedIndex = 0;
+                            }),
                           ),
                         ),
                       ],
@@ -210,15 +241,20 @@ class _CommandDialogState extends State<_CommandDialog> {
                                         ),
                                       ),
                                     ),
-                                    ...group.items.map(
-                                      (item) => _CommandItemRow(
+                                    ...group.items.map((item) {
+                                      final index = itemIndex++;
+                                      return _CommandItemRow(
                                         item: item,
+                                        selected: index == _selectedIndex,
+                                        onHover: () => setState(
+                                          () => _selectedIndex = index,
+                                        ),
                                         onTap: () {
                                           Navigator.of(context).pop();
                                           item.onSelect?.call();
                                         },
-                                      ),
-                                    ),
+                                      );
+                                    }),
                                   ],
                                 );
                               }).toList(),
@@ -237,9 +273,16 @@ class _CommandDialogState extends State<_CommandDialog> {
 
 class _CommandItemRow extends StatefulWidget {
   final SomaCommandItem item;
+  final bool selected;
+  final VoidCallback onHover;
   final VoidCallback onTap;
 
-  const _CommandItemRow({required this.item, required this.onTap});
+  const _CommandItemRow({
+    required this.item,
+    required this.selected,
+    required this.onHover,
+    required this.onTap,
+  });
 
   @override
   State<_CommandItemRow> createState() => _CommandItemRowState();
@@ -251,40 +294,48 @@ class _CommandItemRowState extends State<_CommandItemRow> {
   @override
   Widget build(BuildContext context) {
     final c = SomaTheme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: _hovered ? c.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            children: [
-              if (widget.item.icon != null) ...[
-                Icon(
-                  widget.item.icon,
-                  size: 16,
-                  color: _hovered ? c.accentForeground : c.foreground,
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Text(
-                  widget.item.label,
-                  style: TextStyle(
-                    fontFamily: 'Outfit',
-                    fontSize: 14,
-                    color: _hovered ? c.accentForeground : c.foreground,
+    final isActive = _hovered || widget.selected;
+    return Semantics(
+      selected: widget.selected,
+      button: true,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) {
+          setState(() => _hovered = true);
+          widget.onHover();
+        },
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: BoxDecoration(
+              color: isActive ? c.accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                if (widget.item.icon != null) ...[
+                  Icon(
+                    widget.item.icon,
+                    size: 16,
+                    color: isActive ? c.accentForeground : c.foreground,
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Text(
+                    widget.item.label,
+                    style: TextStyle(
+                      fontFamily: 'Outfit',
+                      fontSize: 14,
+                      color: isActive ? c.accentForeground : c.foreground,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

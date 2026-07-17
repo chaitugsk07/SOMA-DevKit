@@ -5,6 +5,15 @@ import '../inputs/soma_checkbox.dart';
 import '../inputs/soma_input.dart';
 import '../navigation/soma_pagination.dart';
 
+enum SomaDataTableDensity { comfortable, compact }
+
+typedef SomaDataCellBuilder = Widget Function(
+  BuildContext context,
+  SomaDataColumn column,
+  String value,
+  Map<String, String> row,
+);
+
 class SomaDataColumn {
   final String key;
   final String header;
@@ -23,6 +32,15 @@ class SomaDataTable extends StatefulWidget {
   final bool selectable;
   final bool filterable;
   final int pageSize;
+  final SomaDataTableDensity density;
+  final bool loading;
+  final String? error;
+  final String filterPlaceholder;
+  final String emptyMessage;
+  final String noResultsMessage;
+  final Widget? toolbar;
+  final SomaDataCellBuilder? cellBuilder;
+  final ValueChanged<Set<int>>? onSelectionChanged;
 
   const SomaDataTable({
     super.key,
@@ -31,6 +49,15 @@ class SomaDataTable extends StatefulWidget {
     this.selectable = false,
     this.filterable = false,
     this.pageSize = 0,
+    this.density = SomaDataTableDensity.comfortable,
+    this.loading = false,
+    this.error,
+    this.filterPlaceholder = 'Filter resources…',
+    this.emptyMessage = 'No resources yet.',
+    this.noResultsMessage = 'No resources match your filters.',
+    this.toolbar,
+    this.cellBuilder,
+    this.onSelectionChanged,
   });
 
   @override
@@ -64,9 +91,8 @@ class _SomaDataTableState extends State<SomaDataTable> {
         final bv = b.row[key] ?? '';
         final na = double.tryParse(av);
         final nb = double.tryParse(bv);
-        final ord = (na != null && nb != null)
-            ? na.compareTo(nb)
-            : av.compareTo(bv);
+        final ord =
+            (na != null && nb != null) ? na.compareTo(nb) : av.compareTo(bv);
         return asc ? ord : -ord;
       });
     }
@@ -99,12 +125,16 @@ class _SomaDataTableState extends State<SomaDataTable> {
     });
   }
 
+  void _notifySelectionChanged() {
+    widget.onSelectionChanged?.call(Set<int>.unmodifiable(_selected));
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = SomaTheme.of(context);
     final paged = _paged;
-    final allOnPageSelected = paged.isNotEmpty &&
-        paged.every((r) => _selected.contains(r.origIndex));
+    final allOnPageSelected =
+        paged.isNotEmpty && paged.every((r) => _selected.contains(r.origIndex));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -112,11 +142,18 @@ class _SomaDataTableState extends State<SomaDataTable> {
       children: [
         if (widget.filterable) ...[
           SomaInput(
-            placeholder: 'Filter…',
+            placeholder: widget.filterPlaceholder,
             onChanged: (v) => setState(() {
               _filter = v;
               _page = 1;
             }),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (widget.toolbar != null) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: widget.toolbar!,
           ),
           const SizedBox(height: 12),
         ],
@@ -130,17 +167,27 @@ class _SomaDataTableState extends State<SomaDataTable> {
             children: [
               if (widget.selectable)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: EdgeInsets.symmetric(
+                    horizontal:
+                        widget.density == SomaDataTableDensity.compact ? 8 : 12,
+                    vertical:
+                        widget.density == SomaDataTableDensity.compact ? 7 : 10,
+                  ),
                   child: SomaCheckbox(
                     value: allOnPageSelected,
                     onChanged: (_) {
                       setState(() {
                         if (allOnPageSelected) {
-                          for (final r in paged) { _selected.remove(r.origIndex); }
+                          for (final r in paged) {
+                            _selected.remove(r.origIndex);
+                          }
                         } else {
-                          for (final r in paged) { _selected.add(r.origIndex); }
+                          for (final r in paged) {
+                            _selected.add(r.origIndex);
+                          }
                         }
                       });
+                      _notifySelectionChanged();
                     },
                   ),
                 ),
@@ -149,6 +196,7 @@ class _SomaDataTableState extends State<SomaDataTable> {
                       col: col,
                       sortKey: _sortKey,
                       sortAsc: _sortAsc,
+                      density: widget.density,
                       onSort: col.sortable ? () => _toggleSort(col.key) : null,
                     ),
                   )),
@@ -156,23 +204,38 @@ class _SomaDataTableState extends State<SomaDataTable> {
           ),
         ),
         // Data rows
-        for (final entry in paged)
-          _DataRow(
-            entry: entry,
-            columns: widget.columns,
-            isSelected: _selected.contains(entry.origIndex),
-            selectable: widget.selectable,
-            onToggleSelect: () {
-              setState(() {
-                if (_selected.contains(entry.origIndex)) {
-                  _selected.remove(entry.origIndex);
-                } else {
-                  _selected.add(entry.origIndex);
-                }
-              });
-            },
-          ),
-        if (widget.pageSize > 0 && _totalPages > 1) ...[
+        if (widget.loading)
+          const _TableState(message: 'Loading resources…', loading: true)
+        else if (widget.error != null)
+          _TableState(message: widget.error!, isError: true)
+        else if (widget.rows.isEmpty)
+          _TableState(message: widget.emptyMessage)
+        else if (paged.isEmpty)
+          _TableState(message: widget.noResultsMessage)
+        else
+          for (final entry in paged)
+            _DataRow(
+              entry: entry,
+              columns: widget.columns,
+              isSelected: _selected.contains(entry.origIndex),
+              selectable: widget.selectable,
+              density: widget.density,
+              cellBuilder: widget.cellBuilder,
+              onToggleSelect: () {
+                setState(() {
+                  if (_selected.contains(entry.origIndex)) {
+                    _selected.remove(entry.origIndex);
+                  } else {
+                    _selected.add(entry.origIndex);
+                  }
+                });
+                _notifySelectionChanged();
+              },
+            ),
+        if (!widget.loading &&
+            widget.error == null &&
+            widget.pageSize > 0 &&
+            _totalPages > 1) ...[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
@@ -192,12 +255,14 @@ class _HeaderCell extends StatefulWidget {
   final SomaDataColumn col;
   final String? sortKey;
   final bool sortAsc;
+  final SomaDataTableDensity density;
   final VoidCallback? onSort;
 
   const _HeaderCell({
     required this.col,
     required this.sortKey,
     required this.sortAsc,
+    required this.density,
     this.onSort,
   });
 
@@ -233,7 +298,9 @@ class _HeaderCellState extends State<_HeaderCell> {
           const SizedBox(width: 4),
           Icon(
             isActive
-                ? (widget.sortAsc ? LucideIcons.chevronUp : LucideIcons.chevronDown)
+                ? (widget.sortAsc
+                    ? LucideIcons.chevronUp
+                    : LucideIcons.chevronDown)
                 : LucideIcons.chevronsUpDown,
             size: 14,
             color: isActive ? c.foreground : c.mutedForeground,
@@ -245,9 +312,13 @@ class _HeaderCellState extends State<_HeaderCell> {
     Widget cell = AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       curve: Curves.easeOutCubic,
-      color: isSortable && _hovered ? c.accent.withAlpha(30) : Colors.transparent,
+      color:
+          isSortable && _hovered ? c.accent.withAlpha(30) : Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: widget.density == SomaDataTableDensity.compact ? 8 : 12,
+          vertical: widget.density == SomaDataTableDensity.compact ? 7 : 10,
+        ),
         child: label,
       ),
     );
@@ -273,6 +344,8 @@ class _DataRow extends StatefulWidget {
   final List<SomaDataColumn> columns;
   final bool isSelected;
   final bool selectable;
+  final SomaDataTableDensity density;
+  final SomaDataCellBuilder? cellBuilder;
   final VoidCallback onToggleSelect;
 
   const _DataRow({
@@ -280,6 +353,8 @@ class _DataRow extends StatefulWidget {
     required this.columns,
     required this.isSelected,
     required this.selectable,
+    required this.density,
+    this.cellBuilder,
     required this.onToggleSelect,
   });
 
@@ -317,7 +392,12 @@ class _DataRowState extends State<_DataRow> {
           children: [
             if (widget.selectable)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      widget.density == SomaDataTableDensity.compact ? 8 : 12,
+                  vertical:
+                      widget.density == SomaDataTableDensity.compact ? 7 : 10,
+                ),
                 child: SomaCheckbox(
                   value: widget.isSelected,
                   onChanged: (_) => widget.onToggleSelect(),
@@ -325,17 +405,86 @@ class _DataRowState extends State<_DataRow> {
               ),
             ...widget.columns.map((col) => Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Text(
-                      widget.entry.row[col.key] ?? '',
-                      style: TextStyle(
-                        fontFamily: 'Outfit',
-                        fontSize: 14,
-                        color: c.foreground,
-                      ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.density == SomaDataTableDensity.compact
+                          ? 8
+                          : 12,
+                      vertical: widget.density == SomaDataTableDensity.compact
+                          ? 7
+                          : 10,
                     ),
+                    child: widget.cellBuilder?.call(
+                          context,
+                          col,
+                          widget.entry.row[col.key] ?? '',
+                          widget.entry.row,
+                        ) ??
+                        Text(
+                          widget.entry.row[col.key] ?? '',
+                          style: TextStyle(
+                            fontFamily: 'Outfit',
+                            fontSize:
+                                widget.density == SomaDataTableDensity.compact
+                                    ? 12
+                                    : 14,
+                            color: c.foreground,
+                          ),
+                        ),
                   ),
                 )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TableState extends StatelessWidget {
+  final String message;
+  final bool loading;
+  final bool isError;
+
+  const _TableState({
+    required this.message,
+    this.loading = false,
+    this.isError = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = SomaTheme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: c.border)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (loading) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: c.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Outfit',
+                  fontSize: 13,
+                  color: isError ? c.destructive : c.mutedForeground,
+                ),
+              ),
+            ),
           ],
         ),
       ),

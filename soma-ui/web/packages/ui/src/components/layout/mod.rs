@@ -6,3 +6,5 @@ pub mod scroll_area;
 pub use scroll_area::*;
 pub mod page_header;
 pub use page_header::*;
+pub mod console_shell;
+pub use console_shell::*;

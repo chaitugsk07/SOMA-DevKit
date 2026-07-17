@@ -1,7 +1,11 @@
 use crate::ui::*;
 use leptos::prelude::*;
-use soma_ui::{Column, DataTable};
+use soma_ui::{
+    Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, Column, DataCellRenderer, DataTable,
+    TableDensity,
+};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 fn sample_rows() -> Vec<HashMap<String, String>> {
     let data = [
@@ -73,7 +77,32 @@ fn parse_page_size(s: &str) -> usize {
 pub fn DataTablePage() -> impl IntoView {
     let selectable = RwSignal::new(true);
     let filterable = RwSignal::new(true);
+    let compact = RwSignal::new(false);
     let page_size = RwSignal::new(5usize);
+
+    let cell_renderer: DataCellRenderer = Arc::new(|key, value, _| {
+        let value = value.to_string();
+        if key == "status" {
+            let variant = match value.as_str() {
+                "Active" => BadgeVariant::Success,
+                "Pending" => BadgeVariant::Secondary,
+                _ => BadgeVariant::Destructive,
+            };
+            view! { <Badge variant=variant>{value}</Badge> }.into_any()
+        } else {
+            view! { <span>{value}</span> }.into_any()
+        }
+    });
+
+    let toolbar: ChildrenFn = Arc::new(move || {
+        view! {
+            <div class="flex items-center gap-2">
+                <Button variant=ButtonVariant::Outline size=ButtonSize::Sm>"Export"</Button>
+                <Button size=ButtonSize::Sm>"Add member"</Button>
+            </div>
+        }
+        .into_any()
+    });
 
     view! {
         <div class="max-w-4xl space-y-8">
@@ -111,6 +140,14 @@ pub fn DataTablePage() -> impl IntoView {
                         on:change=move |e| filterable.set(event_target_checked(&e))
                     />
                 </ControlRow>
+                <ControlRow label="Compact density">
+                    <input
+                        type="checkbox"
+                        class="w-4 h-4 rounded border-border bg-secondary text-primary focus:ring-ring focus:ring-offset-card"
+                        prop:checked=move || compact.get()
+                        on:change=move |e| compact.set(event_target_checked(&e))
+                    />
+                </ControlRow>
             </ControlsPanel>
 
             // Preview
@@ -122,6 +159,9 @@ pub fn DataTablePage() -> impl IntoView {
                         selectable=selectable.get()
                         filterable=filterable.get()
                         page_size=page_size.get()
+                        density=if compact.get() { TableDensity::Compact } else { TableDensity::Comfortable }
+                        toolbar=toolbar.clone()
+                        cell_renderer=cell_renderer.clone()
                     />
                 }}
                 <p class="text-sm text-muted-foreground">

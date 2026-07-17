@@ -60,7 +60,7 @@ class CommandScreen extends StatelessWidget {
         child: const Text('Open Command Palette'),
       ),
       controls: Text(
-        'Click the button to open the command palette. Type to filter. Press Escape to close.',
+        'Type to filter, use the arrow keys to move, Enter to select, and Escape to close.',
         style: TextStyle(
           fontFamily: 'Outfit',
           fontSize: 13,
