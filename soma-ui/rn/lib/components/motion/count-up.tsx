@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSharedValue, useAnimatedReaction, withTiming, Easing } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { Text, type TextProps } from '@/lib/components/data-display/text';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type CountUpProps = Omit<TextProps, 'children'> & {
   to: number;
@@ -15,13 +16,17 @@ export type CountUpProps = Omit<TextProps, 'children'> & {
 
 /** Counts a number up from 0 to `to` on mount — for stats/dashboards. */
 export function CountUp({ to, duration = 1000, decimals = 0, prefix = '', suffix = '', ...textProps }: CountUpProps) {
+  const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
   const [display, setDisplay] = useState('0');
 
   useEffect(() => {
     progress.value = 0;
-    progress.value = withTiming(to, { duration, easing: Easing.out(Easing.cubic) });
-  }, [to, duration, progress]);
+    progress.value = withTiming(to, {
+      duration: reducedMotion ? 0 : duration,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [to, duration, progress, reducedMotion]);
 
   useAnimatedReaction(
     () => progress.value,

@@ -3,11 +3,19 @@ import { Text } from '@/lib/components/data-display/text';
 import { productAccents, type ProductAccent } from '@/lib/theme/tokens';
 import { cn } from '@/lib/utils/cn';
 
-/** Small uppercase warm-grey label above a section heading (the ✦ overline). */
+/** Small uppercase label above a section heading. */
 export function SectionOverline({ children, className }: { children: string; className?: string }) {
+  const usesIndicScript = /[\u0900-\u097F\u0C00-\u0C7F]/.test(children);
+
   return (
-    <Text className={cn('font-body text-xs uppercase tracking-[3px] text-muted-foreground', className)}>
-      ✦ {children}
+    <Text
+      className={cn(
+        'font-body text-xs text-muted-foreground',
+        !usesIndicScript && 'uppercase tracking-[3px]',
+        className,
+      )}
+    >
+      {children}
     </Text>
   );
 }
@@ -17,7 +25,7 @@ export function PullQuote({ children, source, className }: { children: string; s
   return (
     <View className={cn('gap-2 py-2', className)}>
       <Text className="font-serif text-xl italic leading-8 text-card-foreground">{children}</Text>
-      {source && <Text className="font-body text-xs text-muted-foreground">— {source}</Text>}
+      {source && <Text className="font-body text-xs text-muted-foreground">{source}</Text>}
     </View>
   );
 }
@@ -38,7 +46,7 @@ export function WhatsAppCTAButton({ label = 'Chat on WhatsApp', onPress, classNa
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className={cn('flex-row items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 active:opacity-85', className)}
+      className={cn('flex-row items-center justify-center gap-2 rounded-md bg-primary px-5 py-3.5 active:opacity-85', className)}
     >
       <Text className="font-body-medium text-sm text-primary-foreground">{label}</Text>
       <Text className="text-primary-foreground">›</Text>
@@ -46,7 +54,7 @@ export function WhatsAppCTAButton({ label = 'Chat on WhatsApp', onPress, classNa
   );
 }
 
-/** Warm-grey card surface used across s-delights (no border, soft radius). */
+/** Restrained warm-white surface used across s-delights. */
 export function DelightsCard({ className, ...props }: ViewProps & { className?: string }) {
-  return <View className={cn('rounded-xl bg-card p-4', className)} {...props} />;
+  return <View className={cn('rounded-lg border border-border/70 bg-card p-4', className)} {...props} />;
 }

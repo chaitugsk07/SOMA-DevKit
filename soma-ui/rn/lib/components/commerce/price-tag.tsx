@@ -10,10 +10,15 @@ export type PriceTagProps = {
   currency?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  priceClassName?: string;
+  wasClassName?: string;
 };
 
 const fmt = (n: number, currency: string) =>
-  `${currency}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `${currency}${n.toLocaleString('en-IN', {
+    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const sizeMap = {
   sm: { price: 'text-sm', was: 'text-xs' },
@@ -21,14 +26,24 @@ const sizeMap = {
   lg: { price: 'text-3xl', was: 'text-base' },
 } as const;
 
-/** Price display with optional strikethrough original (sale). Rajdhani for weight. */
-export function PriceTag({ amount, was, currency = '$', size = 'md', className }: PriceTagProps) {
+/** Price display with optional strikethrough original. */
+export function PriceTag({
+  amount,
+  was,
+  currency = '$',
+  size = 'md',
+  className,
+  priceClassName,
+  wasClassName,
+}: PriceTagProps) {
   const s = sizeMap[size];
   return (
     <View className={cn('flex-row items-baseline gap-2', className)}>
-      <Text className={cn('font-heading-bold text-foreground', s.price)}>{fmt(amount, currency)}</Text>
+      <Text className={cn('font-body-semibold text-foreground', s.price, priceClassName)}>
+        {fmt(amount, currency)}
+      </Text>
       {was != null && was > amount && (
-        <Text className={cn('font-body text-muted-foreground line-through', s.was)}>
+        <Text className={cn('font-body text-muted-foreground line-through', s.was, wasClassName)}>
           {fmt(was, currency)}
         </Text>
       )}

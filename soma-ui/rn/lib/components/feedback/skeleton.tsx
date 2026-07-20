@@ -1,6 +1,7 @@
 import { View, type ViewProps } from 'react-native';
 import { MotiView } from 'moti';
 import { cn } from '@/lib/utils/cn';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type SkeletonProps = ViewProps & {
   className?: string;
@@ -10,7 +11,9 @@ export type SkeletonProps = ViewProps & {
 
 /** Loading placeholder with a subtle pulse. */
 export function Skeleton({ className, animated = true, ...props }: SkeletonProps) {
-  if (!animated) {
+  const reducedMotion = useReducedMotion();
+
+  if (!animated || reducedMotion) {
     return <View className={cn('rounded-md bg-muted', className)} {...props} />;
   }
   return (

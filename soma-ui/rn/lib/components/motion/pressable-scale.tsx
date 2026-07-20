@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, type PressableProps } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type PressableScaleProps = PressableProps & {
   /** Scale applied while pressed. */
@@ -18,6 +19,8 @@ export function PressableScale({
   ...props
 }: PressableScaleProps) {
   const [pressed, setPressed] = useState(false);
+  const reducedMotion = useReducedMotion();
+
   return (
     <Pressable
       onPressIn={(e) => {
@@ -31,8 +34,10 @@ export function PressableScale({
       {...props}
     >
       <MotiView
-        animate={{ scale: pressed ? activeScale : 1 }}
-        transition={{ type: 'spring', damping: 15, stiffness: 250 }}
+        animate={{ scale: !reducedMotion && pressed ? activeScale : 1 }}
+        transition={reducedMotion
+          ? { type: 'timing', duration: 0 }
+          : { type: 'spring', damping: 15, stiffness: 250 }}
         className={className}
       >
         {children as React.ReactNode}

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { AnimatePresence, MotiView } from 'moti';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
+import { useReducedMotion } from '@/lib/hooks';
 
 type ToastVariant = 'default' | 'destructive' | 'success' | 'warning' | 'info';
 type Toast = { id: number; title: string; description?: string; variant: ToastVariant };
@@ -39,6 +40,7 @@ let nextId = 0;
 
 export function ToastProvider({ children, duration = 3000 }: { children: ReactNode; duration?: number }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const reducedMotion = useReducedMotion();
 
   const toast = useCallback<ToastContextValue['toast']>(
     ({ title, description, variant = 'default' }) => {
@@ -52,16 +54,18 @@ export function ToastProvider({ children, duration = 3000 }: { children: ReactNo
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 items-center gap-2 p-4">
+      <View
+        style={{ pointerEvents: 'box-none' }}
+        className="absolute inset-x-0 bottom-0 items-center gap-2 p-4"
+      >
         <AnimatePresence>
           {toasts.map((t) => (
             <MotiView
               key={t.id}
-              pointerEvents="auto"
-              from={{ opacity: 0, translateY: 20 }}
+              from={{ opacity: reducedMotion ? 1 : 0, translateY: reducedMotion ? 0 : 20 }}
               animate={{ opacity: 1, translateY: 0 }}
-              exit={{ opacity: 0, translateY: 20 }}
-              transition={{ type: 'timing', duration: 200 }}
+              exit={{ opacity: reducedMotion ? 1 : 0, translateY: reducedMotion ? 0 : 20 }}
+              transition={{ type: 'timing', duration: reducedMotion ? 0 : 200 }}
               className={cn('w-full max-w-md rounded-lg border border-l-4 bg-card p-4 shadow', border[t.variant])}
             >
               <Text className={cn('font-heading-semibold text-sm', titleColor[t.variant])}>{t.title}</Text>

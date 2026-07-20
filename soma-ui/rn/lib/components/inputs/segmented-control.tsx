@@ -36,7 +36,7 @@ export function SegmentedControl<T extends string = string>({
             disabled={disabled}
             onPress={() => onChange(option.value)}
             className={cn(
-              'rounded-md border px-3 py-1.5',
+              'min-h-11 justify-center rounded-md border px-3 py-2',
               selected
                 ? 'border-primary bg-primary'
                 : 'border-border bg-muted',

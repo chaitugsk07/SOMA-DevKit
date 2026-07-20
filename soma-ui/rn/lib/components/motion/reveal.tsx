@@ -1,5 +1,7 @@
 import { type ReactNode } from 'react';
+import { View } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from '@/lib/hooks';
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'none';
 
@@ -29,6 +31,12 @@ export function Reveal({
   duration = 500,
   className,
 }: RevealProps) {
+  const reducedMotion = useReducedMotion();
+
+  if (reducedMotion) {
+    return <View className={className}>{children}</View>;
+  }
+
   return (
     <MotiView
       from={{ opacity: 0, ...from[direction] }}

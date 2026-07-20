@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { MotiView } from 'moti';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type StatusTone = 'neutral' | 'active' | 'success' | 'warning';
 
@@ -23,9 +24,10 @@ const tones: Record<StatusTone, { dot: string; text: string; bg: string }> = {
 /** Status label with a colored (optionally pulsing) dot. */
 export function StatusPill({ label, tone = 'neutral', live = false, className }: StatusPillProps) {
   const t = tones[tone];
+  const reducedMotion = useReducedMotion();
   return (
     <View className={cn('flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1', t.bg, className)}>
-      {live ? (
+      {live && !reducedMotion ? (
         <MotiView
           from={{ opacity: 0.4, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}

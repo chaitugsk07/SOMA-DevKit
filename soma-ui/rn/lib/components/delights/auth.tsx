@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { View, TextInput, Pressable, Modal, type TextInputProps } from 'react-native';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
+import { hslFromVar, useThemeVars } from '@/lib/theme';
 
 // ─── PasswordInput ───────────────────────────────────────────────────────────
 export function PasswordInput({ className, ...props }: TextInputProps & { className?: string }) {
   const [hidden, setHidden] = useState(true);
   const [focused, setFocused] = useState(false);
+  const vars = useThemeVars();
   return (
     <View className={cn('h-11 flex-row items-center rounded-lg border bg-input px-3', focused ? 'border-ring' : 'border-border', className)}>
       <TextInput
         secureTextEntry={hidden}
-        placeholderTextColor="hsl(var(--muted-foreground))"
+        placeholderTextColor={hslFromVar(vars['--muted-foreground'])}
+        style={{ color: hslFromVar(vars['--foreground']) }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className="flex-1 font-body text-sm text-foreground"

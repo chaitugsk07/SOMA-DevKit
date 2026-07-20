@@ -1,5 +1,7 @@
 import { type ReactNode } from 'react';
+import { View } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from '@/lib/hooks';
 
 type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -26,6 +28,12 @@ export function SlideIn({
   duration = 350,
   className,
 }: SlideInProps) {
+  const reducedMotion = useReducedMotion();
+
+  if (reducedMotion) {
+    return <View className={className}>{children}</View>;
+  }
+
   return (
     <MotiView
       from={{ opacity: 0, ...offset[from] }}

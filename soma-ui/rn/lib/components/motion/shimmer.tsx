@@ -1,4 +1,6 @@
+import { View } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from '@/lib/hooks';
 import { cn } from '@/lib/utils/cn';
 
 export type ShimmerProps = {
@@ -7,6 +9,12 @@ export type ShimmerProps = {
 
 /** Looping opacity pulse for loading placeholders. */
 export function Shimmer({ className }: ShimmerProps) {
+  const reducedMotion = useReducedMotion();
+
+  if (reducedMotion) {
+    return <View className={cn('rounded-md bg-muted', className)} />;
+  }
+
   return (
     <MotiView
       from={{ opacity: 0.5 }}

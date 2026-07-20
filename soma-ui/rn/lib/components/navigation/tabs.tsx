@@ -3,6 +3,7 @@ import { View, Pressable } from 'react-native';
 import { MotiView } from 'moti';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type TabItem = { value: string; label: string; content: ReactNode };
 
@@ -16,6 +17,7 @@ export type TabsProps = {
 
 /** Tab bar with an animated active indicator + content panel. */
 export function Tabs({ items, value, onValueChange, className }: TabsProps) {
+  const reducedMotion = useReducedMotion();
   const [internal, setInternal] = useState(items[0]?.value);
   const active = value ?? internal;
   const activeIndex = Math.max(0, items.findIndex((i) => i.value === active));
@@ -32,9 +34,10 @@ export function Tabs({ items, value, onValueChange, className }: TabsProps) {
         <MotiView
           className="absolute bottom-1 top-1 rounded-md bg-card"
           animate={{ left: `${activeIndex * pct}%` }}
-          transition={{ type: 'spring', damping: 18, stiffness: 220 }}
-          style={{ width: `${pct}%` }}
-          pointerEvents="none"
+          transition={reducedMotion
+            ? { type: 'timing', duration: 0 }
+            : { type: 'spring', damping: 18, stiffness: 220 }}
+          style={{ width: `${pct}%`, pointerEvents: 'none' }}
         />
         {items.map((item) => {
           const isActive = item.value === active;
@@ -44,7 +47,7 @@ export function Tabs({ items, value, onValueChange, className }: TabsProps) {
               onPress={() => select(item.value)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              className="flex-1 items-center justify-center px-3 py-2"
+              className="min-h-11 flex-1 items-center justify-center px-3 py-2"
             >
               <Text
                 className={cn(
@@ -61,9 +64,9 @@ export function Tabs({ items, value, onValueChange, className }: TabsProps) {
       {/* key on `active` so the panel cross-fades when the tab changes */}
       <MotiView
         key={active}
-        from={{ opacity: 0, translateX: 8 }}
+        from={{ opacity: reducedMotion ? 1 : 0, translateX: reducedMotion ? 0 : 8 }}
         animate={{ opacity: 1, translateX: 0 }}
-        transition={{ type: 'timing', duration: 200 }}
+        transition={{ type: 'timing', duration: reducedMotion ? 0 : 200 }}
         className="pt-4"
       >
         {items.find((i) => i.value === active)?.content}

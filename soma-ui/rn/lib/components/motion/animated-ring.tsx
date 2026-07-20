@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
 import { useThemeVars, hslFromVar } from '@/lib/theme/vars-context';
+import { useReducedMotion } from '@/lib/hooks';
 import { CountUp } from './count-up';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -38,6 +39,7 @@ export function AnimatedRing({
   color,
   trackColor,
 }: AnimatedRingProps) {
+  const reducedMotion = useReducedMotion();
   const activeVars = useThemeVars();
   const resolvedColor = color ?? hslFromVar(activeVars['--success']);
   const resolvedTrack = trackColor ?? hslFromVar(activeVars['--border']);
@@ -49,10 +51,10 @@ export function AnimatedRing({
   useEffect(() => {
     progress.value = 0;
     progress.value = withTiming(Math.max(0, Math.min(100, value)) / 100, {
-      duration,
+      duration: reducedMotion ? 0 : duration,
       easing: Easing.out(Easing.cubic),
     });
-  }, [value, duration, progress]);
+  }, [value, duration, progress, reducedMotion]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - progress.value),
@@ -74,7 +76,14 @@ export function AnimatedRing({
           animatedProps={animatedProps}
         />
       </Svg>
-      {showLabel && <CountUp to={value} duration={duration} suffix="%" variant="h3" />}
+      {showLabel && (
+        <CountUp
+          to={value}
+          duration={reducedMotion ? 0 : duration}
+          suffix="%"
+          variant="h3"
+        />
+      )}
     </View>
   );
 }

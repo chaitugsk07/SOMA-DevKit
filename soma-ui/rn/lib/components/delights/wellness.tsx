@@ -73,10 +73,10 @@ export function QuizOptionButton({ label, icon, selected, onPress, className }: 
 }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }}
-      className={cn('flex-row items-center gap-3 rounded-xl border p-4', selected ? 'border-primary bg-secondary' : 'border-border bg-card active:bg-accent', className)}>
+      className={cn('flex-row items-center gap-3 border-b p-4', selected ? 'border-primary bg-secondary' : 'border-border bg-transparent active:bg-accent', className)}>
       {icon && <Text className="text-lg">{icon}</Text>}
       <Text className={cn('flex-1 font-body-medium text-sm', selected ? 'text-card-foreground' : 'text-card-foreground')}>{label}</Text>
-      <View className={cn('h-5 w-5 items-center justify-center rounded-full border-2', selected ? 'border-primary bg-primary' : 'border-border')}>
+      <View className={cn('h-5 w-5 items-center justify-center border', selected ? 'border-primary bg-primary' : 'border-border')}>
         {selected && <Text className="text-[10px] leading-none text-primary-foreground">✓</Text>}
       </View>
     </Pressable>

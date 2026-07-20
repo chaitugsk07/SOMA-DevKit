@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
 
@@ -22,7 +21,7 @@ export type BottomTabBarProps = {
   className?: string;
 };
 
-/** App bottom navigation with an animated active pill + badges. */
+/** App bottom navigation with a restrained editorial active rule. */
 export function BottomTabBar({ items, active, onSelect, className }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
@@ -31,7 +30,7 @@ export function BottomTabBar({ items, active, onSelect, className }: BottomTabBa
       style={{ paddingBottom: insets.bottom }}
       className={cn('border-t border-border bg-card', className)}
     >
-      <View className="flex-row">
+      <View className="w-full max-w-3xl self-center flex-row">
         {items.map((item) => {
           const isActive = item.key === active;
           return (
@@ -41,17 +40,18 @@ export function BottomTabBar({ items, active, onSelect, className }: BottomTabBa
               accessibilityRole="tab"
               accessibilityLabel={item.label}
               accessibilityState={{ selected: isActive }}
-              className="flex-1 items-center justify-center py-2.5"
-              style={{ minHeight: 44 }}
+              className="flex-1 items-center justify-center py-3"
+              style={{
+                minHeight: 52,
+                borderTopWidth: isActive ? 2 : 2,
+                borderTopColor: isActive ? '#D4930D' : 'transparent',
+              }}
             >
               {/* Icon area */}
               <View className="relative items-center justify-center">
                 {item.iconNode != null ? (
                   <View
-                    className={cn(
-                      'items-center justify-center rounded-full px-3 py-0.5',
-                      isActive ? 'bg-accent' : 'bg-transparent',
-                    )}
+                    className="items-center justify-center"
                   >
                     {/* Clone the icon node with color-appropriate size; callers supply the icon element */}
                     <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
@@ -87,15 +87,6 @@ export function BottomTabBar({ items, active, onSelect, className }: BottomTabBa
                 {item.label}
               </Text>
 
-              {/* Active indicator dot */}
-              {isActive && (
-                <MotiView
-                  from={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: 'spring', damping: 16, stiffness: 260 }}
-                  className="mt-0.5 h-1 w-1 rounded-full bg-accent-foreground"
-                />
-              )}
             </Pressable>
           );
         })}

@@ -1,6 +1,7 @@
 import { useState, forwardRef } from 'react';
 import { TextInput, Text, View, type TextInputProps } from 'react-native';
 import { cn } from '@/lib/utils/cn';
+import { hslFromVar, useThemeVars } from '@/lib/theme';
 
 export type InputProps = TextInputProps & {
   className?: string;
@@ -14,12 +15,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   ref,
 ) {
   const [focused, setFocused] = useState(false);
+  const vars = useThemeVars();
 
   const textInput = (
     <TextInput
       ref={ref}
       editable={editable}
-      placeholderTextColor="hsl(var(--muted-foreground))"
+      placeholderTextColor={hslFromVar(vars['--muted-foreground'])}
+      style={{ color: hslFromVar(vars['--foreground']) }}
       onFocus={(e) => {
         setFocused(true);
         onFocus?.(e);

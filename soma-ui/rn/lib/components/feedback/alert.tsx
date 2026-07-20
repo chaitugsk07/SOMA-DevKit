@@ -32,7 +32,11 @@ export type AlertProps = VariantProps<typeof alertVariants> & {
 export function Alert({ variant, title, description, className }: AlertProps) {
   const v = variant ?? 'default';
   return (
-    <View className={cn(alertVariants({ variant }), className)}>
+    <View
+      className={cn(alertVariants({ variant }), className)}
+      accessibilityRole="alert"
+      accessibilityLiveRegion={v === 'destructive' ? 'assertive' : 'polite'}
+    >
       <Text className={cn('font-heading-semibold text-base', titleColor[v])}>{title}</Text>
       {description && (
         <Text className="mt-1 font-body text-sm text-muted-foreground">{description}</Text>

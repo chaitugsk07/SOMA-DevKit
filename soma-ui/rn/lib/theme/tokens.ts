@@ -70,30 +70,22 @@ export const darkVars = {
 // selected/active states. Near-black ink CTAs and product-color restraint
 // (productAccents only for SKU identity dots) are PRESERVED.
 //
-// WCAG contrast ratios (verified 2026-07-02):
-//   muted-foreground on background : 5.27:1  ✓ AA
-//   muted-foreground on card       : 5.74:1  ✓ AA
-//   foreground on background       : 13.00:1 ✓ AAA
-//   primary-foreground on primary  : 17.52:1 ✓ AAA
-//   white on destructive           : 6.66:1  ✓ AA
-//   white on success               : 6.65:1  ✓ AA
-//   accent-foreground on accent    : 7.64:1  ✓ AA
 export const delightsLightVars = {
-  '--background': '32 22% 96%',        // warm cream, slightly warmer
-  '--foreground': '20 7% 17%',         // richer ink
+  '--background': '30 33% 97%',        // warm unbleached paper (#FAF8F5)
+  '--foreground': '0 0% 18%',          // brand charcoal (#2D2D2D)
   '--card': '0 0% 100%',
-  '--card-foreground': '20 6% 10%',
-  '--muted': '30 12% 89%',
-  '--muted-foreground': '24 6% 40%',   // WCAG fix: was 59% (~2.9:1 on cream)
-  '--primary': '20 6% 10%',            // near-black ink CTA — brand signature, KEEP
+  '--card-foreground': '0 0% 18%',
+  '--muted': '39 47% 89%',             // soft sand (#F0E6D4)
+  '--muted-foreground': '0 0% 38%',
+  '--primary': '0 0% 18%',             // charcoal keeps CTA contrast accessible
   '--primary-foreground': '0 0% 100%',
-  '--secondary': '30 14% 92%',
-  '--secondary-foreground': '20 6% 10%',
-  '--accent': '92 24% 89%',            // soft pressed-leaf tint — selected/active surfaces
-  '--accent-foreground': '100 38% 22%', // deep leaf green on accent
-  '--destructive': '8 52% 40%',        // warm terracotta, destructive actions only
+  '--secondary': '39 47% 89%',
+  '--secondary-foreground': '0 0% 18%',
+  '--accent': '125 20% 90%',
+  '--accent-foreground': '125 25% 31%', // leaf green (#4A7C4F)
+  '--destructive': '7 57% 49%',
   '--destructive-foreground': '0 0% 100%',
-  '--success': '100 32% 30%',          // pressed-leaf green (signature accent)
+  '--success': '125 25% 31%',
   '--success-foreground': '0 0% 100%',
   '--warning': '36 66% 32%',           // dark amber, warnings only
   '--warning-foreground': '0 0% 100%',
@@ -101,9 +93,9 @@ export const delightsLightVars = {
   '--info-foreground': '0 0% 100%',
   '--contrast': '20 6% 10%',
   '--contrast-foreground': '0 0% 100%',
-  '--border': '30 10% 87%',
-  '--input': '30 14% 93%',
-  '--ring': '100 32% 30%',             // green focus ring
+  '--border': '34 22% 84%',
+  '--input': '30 33% 97%',
+  '--ring': '40 88% 44%',               // turmeric gold (#D4930D)
 } as const;
 
 // Product accent colors — RESTRICTED: only for SKU/product-identity dots, never

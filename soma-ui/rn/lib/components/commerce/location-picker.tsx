@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import MapView from 'react-native-maps';
 import type { Region } from 'react-native-maps';
@@ -7,6 +7,7 @@ import { MotiView } from 'moti';
 import { Spinner } from '@/lib/components/feedback/spinner';
 import { useThemeVars, hslFromVar } from '@/lib/theme/vars-context';
 import { cn } from '@/lib/utils/cn';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type LocationPickerProps = {
   /** Controlled center; parent updates this to recenter (component animates there). */
@@ -34,26 +35,27 @@ export function LocationPicker({
 }: LocationPickerProps): React.ReactElement {
   const vars = useThemeVars();
   const primaryColor = hslFromVar(vars['--primary']);
+  const reducedMotion = useReducedMotion();
 
   const mapRef = useRef<MapView>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isPanningRef = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
 
   // Animate to new region when the controlled prop changes identity.
   useEffect(() => {
     mapRef.current?.animateToRegion(
       { latitude: region.latitude, longitude: region.longitude, latitudeDelta: DELTA, longitudeDelta: DELTA },
-      300,
+      reducedMotion ? 0 : 300,
     );
-  }, [region.latitude, region.longitude]);
+  }, [region.latitude, region.longitude, reducedMotion]);
 
   const handleRegionChange = useCallback(() => {
-    isPanningRef.current = true;
+    setIsPanning(true);
   }, []);
 
   const handleRegionChangeComplete = useCallback(
     (r: Region) => {
-      isPanningRef.current = false;
+      setIsPanning(false);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         onRegionSettled({ latitude: r.latitude, longitude: r.longitude });
@@ -86,10 +88,12 @@ export function LocationPicker({
       />
 
       {/* Fixed center pin — map pans underneath; pin tip marks the selected point. */}
-      <View style={styles.pinContainer} pointerEvents="none">
+      <View style={[styles.pinContainer, { pointerEvents: 'none' }]}>
         <MotiView
-          animate={{ translateY: isPanningRef.current ? -6 : 0 }}
-          transition={{ type: 'spring', damping: 18, stiffness: 220 }}
+          animate={{ translateY: !reducedMotion && isPanning ? -6 : 0 }}
+          transition={reducedMotion
+            ? { type: 'timing', duration: 0 }
+            : { type: 'spring', damping: 18, stiffness: 220 }}
           style={styles.pinWrapper}
         >
           {/* Shadow dot below pin tip */}

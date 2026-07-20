@@ -20,12 +20,17 @@ export type RadioGroupProps = {
   onChange: (value: string) => void;
   children: React.ReactNode;
   className?: string;
+  accessibilityLabel?: string;
 };
 
-export function RadioGroup({ value, onChange, children, className }: RadioGroupProps) {
+export function RadioGroup({ value, onChange, children, className, accessibilityLabel }: RadioGroupProps) {
   return (
     <RadioGroupContext.Provider value={{ value, onChange }}>
-      <View className={cn('flex-row flex-wrap gap-2', className)}>
+      <View
+        className={cn('flex-row flex-wrap gap-2', className)}
+        accessibilityRole="radiogroup"
+        accessibilityLabel={accessibilityLabel}
+      >
         {children}
       </View>
     </RadioGroupContext.Provider>

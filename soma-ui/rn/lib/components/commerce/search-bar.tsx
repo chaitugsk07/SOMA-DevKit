@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, TextInput, Pressable, type TextInputProps } from 'react-native';
 import { Text } from '@/lib/components/data-display/text';
 import { cn } from '@/lib/utils/cn';
+import { hslFromVar, useThemeVars } from '@/lib/theme';
 
 export type SearchBarProps = Omit<TextInputProps, 'className'> & {
   onClear?: () => void;
@@ -11,6 +12,7 @@ export type SearchBarProps = Omit<TextInputProps, 'className'> & {
 /** Search input with leading glyph, focus ring, and a clear affordance. */
 export function SearchBar({ value, onClear, onFocus, onBlur, className, ...props }: SearchBarProps) {
   const [focused, setFocused] = useState(false);
+  const vars = useThemeVars();
   return (
     <View
       className={cn(
@@ -23,7 +25,8 @@ export function SearchBar({ value, onClear, onFocus, onBlur, className, ...props
       <TextInput
         value={value}
         placeholder="Search products"
-        placeholderTextColor="hsl(var(--muted-foreground))"
+        placeholderTextColor={hslFromVar(vars['--muted-foreground'])}
+        style={{ color: hslFromVar(vars['--foreground']) }}
         onFocus={(e) => { setFocused(true); onFocus?.(e); }}
         onBlur={(e) => { setFocused(false); onBlur?.(e); }}
         className="flex-1 font-body text-sm text-foreground"

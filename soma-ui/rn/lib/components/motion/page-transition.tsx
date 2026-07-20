@@ -1,5 +1,7 @@
 import { type ReactNode } from 'react';
+import { View } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from '@/lib/hooks';
 
 export type PageTransitionVariant = 'fade' | 'slide' | 'scale';
 
@@ -38,7 +40,17 @@ export function PageTransition({
   duration = 280,
   className,
 }: PageTransitionProps) {
+  const reducedMotion = useReducedMotion();
   const v = enter[variant];
+
+  if (reducedMotion) {
+    return (
+      <View key={transitionKey} className={className} style={{ flex: 1 }}>
+        {children}
+      </View>
+    );
+  }
+
   return (
     <MotiView
       key={transitionKey}
