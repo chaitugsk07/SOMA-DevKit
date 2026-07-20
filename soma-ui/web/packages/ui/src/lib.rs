@@ -23,6 +23,15 @@ pub use analytics::{AnalyticsPanel, Dashboard, PanelDef, SomaColumn, SomaResultS
 pub mod hooks;
 pub use hooks::*;
 
+// ── Security-CNAPP convenience aliases ────────────────────────────────────────
+/// `AppShell` is an alias for `ConsoleShell` — left-sidebar + topbar + scrollable main area.
+pub use components::layout::console_shell::ConsoleShell as AppShell;
+/// `SidebarNav` is an alias for `Sidebar` — icon+label nav with active-path highlighting.
+pub use components::navigation::sidebar::Sidebar as SidebarNav;
+/// Re-export so callers can do `use soma_ui::SidebarNavItem` without reaching into submodules.
+pub use components::navigation::sidebar::SidebarItem as SidebarNavItem;
+pub use components::navigation::sidebar::SidebarGroup as SidebarNavGroup;
+
 /// Bundled stylesheet (design tokens + fonts + component utilities).
 ///
 /// Inject once at your app root so every soma-ui component is styled:

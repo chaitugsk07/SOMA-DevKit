@@ -38,3 +38,7 @@ pub mod schema_diagram;
 pub use schema_diagram::*;
 pub mod stat;
 pub use stat::*;
+pub mod severity_badge;
+pub use severity_badge::*;
+pub mod stat_card;
+pub use stat_card::*;
