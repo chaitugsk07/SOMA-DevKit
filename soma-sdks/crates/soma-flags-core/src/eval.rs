@@ -7,9 +7,23 @@
 //!    miss → next rule. If no rollout → RuleMatch.
 //! 4. Fallthrough → default_variation, reason Default.
 //!
-//! Bucketing: sha256_hex(flag_key + "\x00" + stickiness_value);
-//!   first 16 hex chars as u64; bucket = n % 10000;
-//!   included = bucket < (percentage as u64 * 100).
+//! # Bucketing (fixed-space, weight-stable)
+//!
+//! ```text
+//! input      = flag_key + "\x00" + stickiness_value
+//! h          = SHA-256(input)                          — lowercase hex
+//! n          = u64::from_str_radix(&h[0..16], 16)     — first 8 bytes as u64
+//! bucket     = n % BUCKET_SPACE                        — [0, BUCKET_SPACE)
+//! threshold_i = Σ_{j ≤ i} weight_j × BUCKET_SPACE / total_weight
+//!             (cross-multiplied to avoid floating-point:
+//!              bucket * total < cum * BUCKET_SPACE)
+//! ```
+//!
+//! `BUCKET_SPACE = 100_000`. The key invariant: because the modulus is a fixed
+//! constant (not the sum of current weights), changing one variation's weight
+//! only moves users at the boundary between that variation and its neighbour —
+//! not every user in the rollout. Weights are relative; `[50,50]` and `[1,1]`
+//! are equivalent. Zero-weight variations are skipped.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -116,7 +130,9 @@ fn eval_flag_recursive(
         }
 
         if let Some(ref ro) = rule.rollout {
-            // Weighted multi-variation rollout
+            // Weighted multi-variation rollout — fixed bucket space.
+            // See module-level doc for the full algorithm.
+            const BUCKET_SPACE: u64 = 100_000;
             let total: u64 = ro
                 .variations
                 .iter()
@@ -136,14 +152,22 @@ fn eval_flag_recursive(
             let input = format!("{}\x00{}", flag.flag_key, sticky_val);
             let h = sha256_hex(input.as_bytes());
             let n = u64::from_str_radix(&h[0..16], 16).expect("sha256 is hex");
-            let bucket = n % total;
+            // Hash into the fixed space [0, BUCKET_SPACE).
+            // Using fixed space (not sum of weights) means changing one weight
+            // only moves boundary users, not everyone.
+            let bucket = n % BUCKET_SPACE;
             let mut cum: u64 = 0;
             for w in &ro.variations {
                 if w.weight <= 0 {
                     continue;
                 }
                 cum += w.weight as u64;
-                if bucket < cum {
+                // Check: bucket < cum * BUCKET_SPACE / total
+                // Cross-multiplied to avoid floating-point and division rounding:
+                //   bucket * total < cum * BUCKET_SPACE
+                // Both sides fit in u64: bucket ≤ 99_999 and typical total ≤ 10^6,
+                // so bucket * total ≤ ~10^11 << u64::MAX.
+                if bucket * total < cum * BUCKET_SPACE {
                     let (val, vk) = find_variation_value(flag, &w.variation_key);
                     return Decision {
                         flag_key: flag.flag_key.clone(),
@@ -153,7 +177,8 @@ fn eval_flag_recursive(
                     };
                 }
             }
-            // Shouldn't reach here if total > 0, but fall through just in case
+            // Should not reach here (last threshold always covers the full space),
+            // but fall through rather than panic.
             continue;
         } else if let Some(ref vk) = rule.served_variation_key {
             // No rollout → serve immediately
@@ -1156,13 +1181,10 @@ mod tests {
         }
     }
 
-    /// Verify bucketing algorithm is byte-identical to soma_infra::crypto::sha256_hex.
-    /// sha256("stable-flag\x00user-123") must produce the same hex as sha2::Sha256.
+    /// Verify SHA-256 output is valid lowercase hex and the fixed-space bucket is in range.
     #[test]
     fn bucketing_sha256_hex_matches_reference() {
-        // Known SHA-256 of "stable-flag\x00user-123" computed independently:
-        // echo -n "stable-flag\x00user-123" | sha256sum
-        // We verify: first 16 hex chars parse as u64 and bucket is consistent.
+        const BUCKET_SPACE: u64 = 100_000;
         let input = "stable-flag\x00user-123";
         let h = sha256_hex(input.as_bytes());
         assert_eq!(h.len(), 64, "sha256_hex must be 64 hex chars");
@@ -1171,10 +1193,259 @@ mod tests {
                 .all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()),
             "sha256_hex must be lowercase hex"
         );
-        // Must parse cleanly as u64 (first 16 hex = 8 bytes)
         let n = u64::from_str_radix(&h[0..16], 16).expect("must be valid hex");
-        let bucket = n % 10000;
-        assert!(bucket < 10000);
+        let bucket = n % BUCKET_SPACE;
+        assert!(bucket < BUCKET_SPACE, "bucket must be < BUCKET_SPACE");
+    }
+
+    /// (a) Same input always yields the same variation — determinism guarantee.
+    #[test]
+    fn bucketing_fixed_space_determinism() {
+        let flag = CompiledFlag {
+            flag_id: Uuid::new_v4(),
+            flag_key: "det-flag".to_owned(),
+            value_type: ValueType::String,
+            is_active: true,
+            enabled: true,
+            variations: variations(&[("a", "A"), ("b", "B"), ("c", "C")]),
+            off_variation_key: Some("a".to_owned()),
+            default_variation_key: Some("a".to_owned()),
+            targets: vec![],
+            rules: vec![CompiledRule {
+                rule_key: "r".into(),
+                sort_order: 0,
+                served_variation_key: None,
+                rollout: Some(crate::types::CompiledRollout {
+                    attribute: None,
+                    variations: vec![
+                        crate::types::RolloutWeight {
+                            variation_key: "a".into(),
+                            weight: 33,
+                        },
+                        crate::types::RolloutWeight {
+                            variation_key: "b".into(),
+                            weight: 33,
+                        },
+                        crate::types::RolloutWeight {
+                            variation_key: "c".into(),
+                            weight: 34,
+                        },
+                    ],
+                }),
+                clauses: vec![],
+            }],
+            prerequisites: vec![],
+        };
+        let fs = make_flagset(vec![flag]);
+        // Same user evaluated 10 times → always the same variation.
+        let c = ctx("user-xyz", &[]);
+        let first = evaluate(&fs, &c)["det-flag"].variation_key.clone();
+        for _ in 0..9 {
+            let d = &evaluate(&fs, &c)["det-flag"];
+            assert_eq!(
+                d.variation_key, first,
+                "same input must yield same variation"
+            );
+        }
+    }
+
+    /// (b) Changing one weight in a multi-variation rollout moves ONLY boundary users,
+    /// not all users. The test verifies that for a 50/50 split reshuffled to 30/70,
+    /// a user previously in variation A below the new boundary stays in A, a user
+    /// previously in B above the new boundary stays in B, and a user at the boundary
+    /// moves from A to B (the reshuffle area).
+    #[test]
+    fn bucketing_weight_change_only_moves_boundary_users() {
+        const BUCKET_SPACE: u64 = 100_000;
+
+        // Find a user whose bucket lands in [30_000, 50_000) — the "moved" zone.
+        // And one below 30_000 (stays A) and one >= 50_000 (stays B).
+        let flag_key = "border-flag";
+
+        fn bucket_for(flag_key: &str, user: &str) -> u64 {
+            let input = format!("{flag_key}\x00{user}");
+            let h = sha256_hex(input.as_bytes());
+            let n = u64::from_str_radix(&h[0..16], 16).unwrap();
+            n % BUCKET_SPACE
+        }
+
+        // Find representatives for each zone.
+        let mut stayed_a = None; // bucket < 30_000
+        let mut moved = None; // 30_000 <= bucket < 50_000
+        let mut stayed_b = None; // bucket >= 50_000
+        for i in 0..50_000u32 {
+            let u = format!("u{i}");
+            let b = bucket_for(flag_key, &u);
+            if stayed_a.is_none() && b < 30_000 {
+                stayed_a = Some(u.clone());
+            }
+            if moved.is_none() && (30_000..50_000).contains(&b) {
+                moved = Some(u.clone());
+            }
+            if stayed_b.is_none() && b >= 50_000 {
+                stayed_b = Some(u.clone());
+            }
+            if stayed_a.is_some() && moved.is_some() && stayed_b.is_some() {
+                break;
+            }
+        }
+        let stayed_a = stayed_a.expect("must find a user with bucket < 30_000");
+        let moved = moved.expect("must find a user with bucket in [30_000, 50_000)");
+        let stayed_b = stayed_b.expect("must find a user with bucket >= 50_000");
+
+        fn make_ab_flag(flag_key: &str, w_a: i32, w_b: i32) -> crate::types::CompiledFlag {
+            CompiledFlag {
+                flag_id: Uuid::new_v4(),
+                flag_key: flag_key.to_owned(),
+                value_type: ValueType::String,
+                is_active: true,
+                enabled: true,
+                variations: variations(&[("a", "A"), ("b", "B")]),
+                off_variation_key: Some("a".to_owned()),
+                default_variation_key: Some("a".to_owned()),
+                targets: vec![],
+                rules: vec![CompiledRule {
+                    rule_key: "r".into(),
+                    sort_order: 0,
+                    served_variation_key: None,
+                    rollout: Some(crate::types::CompiledRollout {
+                        attribute: None,
+                        variations: vec![
+                            crate::types::RolloutWeight {
+                                variation_key: "a".into(),
+                                weight: w_a,
+                            },
+                            crate::types::RolloutWeight {
+                                variation_key: "b".into(),
+                                weight: w_b,
+                            },
+                        ],
+                    }),
+                    clauses: vec![],
+                }],
+                prerequisites: vec![],
+            }
+        }
+
+        // 50/50 split: A gets [0, 50_000), B gets [50_000, 100_000).
+        let fs_50_50 = make_flagset(vec![make_ab_flag(flag_key, 50, 50)]);
+        assert_eq!(
+            evaluate(&fs_50_50, &ctx(&stayed_a, &[]))[flag_key]
+                .variation_key
+                .as_deref(),
+            Some("a"),
+            "stayed_a stays A in 50/50"
+        );
+        assert_eq!(
+            evaluate(&fs_50_50, &ctx(&moved, &[]))[flag_key]
+                .variation_key
+                .as_deref(),
+            Some("a"),
+            "moved is A in 50/50"
+        );
+        assert_eq!(
+            evaluate(&fs_50_50, &ctx(&stayed_b, &[]))[flag_key]
+                .variation_key
+                .as_deref(),
+            Some("b"),
+            "stayed_b stays B in 50/50"
+        );
+
+        // Reshuffle to 30/70: A gets [0, 30_000), B gets [30_000, 100_000).
+        // 'stayed_a' (bucket < 30_000): still A. ✓
+        // 'moved'  (30_000 <= bucket < 50_000): now B. ← moved.
+        // 'stayed_b' (bucket >= 50_000): still B. ✓
+        let fs_30_70 = make_flagset(vec![make_ab_flag(flag_key, 30, 70)]);
+        assert_eq!(
+            evaluate(&fs_30_70, &ctx(&stayed_a, &[]))[flag_key]
+                .variation_key
+                .as_deref(),
+            Some("a"),
+            "stayed_a is still A in 30/70"
+        );
+        assert_eq!(
+            evaluate(&fs_30_70, &ctx(&moved, &[]))[flag_key]
+                .variation_key
+                .as_deref(),
+            Some("b"),
+            "boundary user moves from A to B"
+        );
+        assert_eq!(
+            evaluate(&fs_30_70, &ctx(&stayed_b, &[]))[flag_key]
+                .variation_key
+                .as_deref(),
+            Some("b"),
+            "stayed_b is still B in 30/70"
+        );
+    }
+
+    /// (c) Distribution across many keys is within a few percent of configured weights.
+    #[test]
+    fn bucketing_distribution_matches_weights() {
+        let flag = CompiledFlag {
+            flag_id: Uuid::new_v4(),
+            flag_key: "dist-flag".to_owned(),
+            value_type: ValueType::String,
+            is_active: true,
+            enabled: true,
+            variations: variations(&[("x", "x"), ("y", "y"), ("z", "z")]),
+            off_variation_key: Some("x".to_owned()),
+            default_variation_key: Some("x".to_owned()),
+            targets: vec![],
+            rules: vec![CompiledRule {
+                rule_key: "r".into(),
+                sort_order: 0,
+                served_variation_key: None,
+                rollout: Some(crate::types::CompiledRollout {
+                    attribute: None,
+                    variations: vec![
+                        crate::types::RolloutWeight {
+                            variation_key: "x".into(),
+                            weight: 20,
+                        },
+                        crate::types::RolloutWeight {
+                            variation_key: "y".into(),
+                            weight: 30,
+                        },
+                        crate::types::RolloutWeight {
+                            variation_key: "z".into(),
+                            weight: 50,
+                        },
+                    ],
+                }),
+                clauses: vec![],
+            }],
+            prerequisites: vec![],
+        };
+        let fs = make_flagset(vec![flag]);
+
+        let mut counts: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        let n = 10_000u32;
+        for i in 0..n {
+            let c = ctx(&format!("user-{i}"), &[]);
+            let d = &evaluate(&fs, &c)["dist-flag"];
+            *counts
+                .entry(d.variation_key.clone().unwrap_or_default())
+                .or_insert(0) += 1;
+        }
+
+        let x = counts.get("x").copied().unwrap_or(0);
+        let y = counts.get("y").copied().unwrap_or(0);
+        let z = counts.get("z").copied().unwrap_or(0);
+        // Allow ±3% from target (2000, 3000, 5000 users out of 10,000).
+        let margin = (n as f64 * 0.03) as u32;
+        assert!(
+            x >= 2000 - margin && x <= 2000 + margin,
+            "x={x} expected ~2000±{margin}"
+        );
+        assert!(
+            y >= 3000 - margin && y <= 3000 + margin,
+            "y={y} expected ~3000±{margin}"
+        );
+        assert!(
+            z >= 5000 - margin && z <= 5000 + margin,
+            "z={z} expected ~5000±{margin}"
+        );
     }
 
     #[test]
