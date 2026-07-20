@@ -23,10 +23,19 @@ const PRODUCTS: &[(&str, &str)] = &[
 /// highlighted and rendered as plain text (not a link). All other products are
 /// `<a href="/{key}/">` links for full-page navigation.
 ///
+/// Pass `products` as a comma-separated list of product keys (e.g.
+/// `"iam,vault,flags,licensing"`) to restrict the rendered catalog. Entries are
+/// shown in PRODUCTS declaration order; unknown keys are ignored; whitespace
+/// around keys is trimmed. When `None` or empty the full list is shown —
+/// existing consumers are unaffected.
+///
 /// Rendering is unconditional — the caller decides whether to mount it
 /// (dashboards gate on their `BASE` const).
 #[component]
-pub fn ProductSwitcher(current: &'static str) -> impl IntoView {
+pub fn ProductSwitcher(
+    current: &'static str,
+    #[prop(default = None)] products: Option<&'static str>,
+) -> impl IntoView {
     let open = RwSignal::new(false);
 
     // Escape closes the menu — auto-removed when this component unmounts.
@@ -41,6 +50,9 @@ pub fn ProductSwitcher(current: &'static str) -> impl IntoView {
         .find(|(k, _)| *k == current)
         .map(|(_, label)| *label)
         .unwrap_or(current);
+
+    // ponytail: `products` is 'static — captured by value, no allocation.
+    let filter = products.filter(|s| !s.is_empty());
 
     let trigger_class = format!(
         "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium \
@@ -81,6 +93,10 @@ pub fn ProductSwitcher(current: &'static str) -> impl IntoView {
                 >
                     {PRODUCTS
                         .iter()
+                        .filter(|(key, _)| match filter {
+                            Some(keys) => keys.split(',').any(|k| k.trim() == *key),
+                            None => true,
+                        })
                         .map(|(key, label)| {
                             let is_current = *key == current;
                             if is_current {

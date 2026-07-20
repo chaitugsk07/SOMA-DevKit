@@ -99,6 +99,11 @@ pub fn Sparkline(
             .into_any()
         }
         SparkVariant::Bars => {
+            // Bar charts always baseline from 0 so heights are proportional to
+            // absolute values. Using (value - min_val)/range would make the
+            // smallest non-zero bucket invisible while the next-smallest
+            // appears full-height — especially visible with sparse audit data.
+            let bar_max = max_val.max(1.0);
             let bar_slot = plot_w / n as f64;
             let bar_w = (bar_slot * 0.7).max(1.0);
             let gap = (bar_slot - bar_w) / 2.0;
@@ -106,8 +111,10 @@ pub fn Sparkline(
             let bars: Vec<_> = data
                 .iter()
                 .enumerate()
+                .filter(|(_, p)| p.value > 0.0)
                 .map(|(i, p)| {
-                    let bar_h = ((p.value - min_val) / range * plot_h).max(0.5);
+                    // Clamp to 0.5 minimum so any non-zero bucket is visible.
+                    let bar_h = (p.value / bar_max * plot_h).max(0.5);
                     let x = PAD + i as f64 * bar_slot + gap;
                     let y = baseline_y - bar_h;
                     view! {

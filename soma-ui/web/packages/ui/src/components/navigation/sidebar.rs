@@ -2,6 +2,9 @@ use crate::icons::{icondata, Icon};
 use leptos::prelude::*;
 
 /// A single nav item for the Sidebar.
+///
+/// Accessibility: the active `<a>` element receives `aria-current="page"` so that
+/// screen readers announce the current page when navigating the sidebar.
 #[derive(Clone, Default)]
 pub struct SidebarItem {
     pub label: String,
@@ -66,6 +69,7 @@ pub fn Sidebar(
                 let label = item.label.clone();
                 let icon = item.icon;
                 let badge = item.badge.clone();
+                let href_cmp2 = href_cmp.clone();
                 view! {
                     <a
                         href=href_attr
@@ -77,6 +81,7 @@ pub fn Sidebar(
                                 "flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors border-l-[3px] border-transparent".to_string()
                             }
                         }
+                        aria-current=move || if active_path.get() == href_cmp2 { Some("page") } else { None }
                     >
                         {icon.map(|ic| view! { <span aria-hidden="true"><Icon icon=Signal::derive(move || ic) attr:class="w-4 h-4 shrink-0" /></span> })}
                         <span class="truncate">{label}</span>
@@ -111,6 +116,7 @@ pub fn Sidebar(
                     let label = item.label.clone();
                     let icon = item.icon;
                     let badge = item.badge.clone();
+                    let href_cmp2 = href_cmp.clone();
                     let wrap = if idx == 0 { "flex flex-col" } else { "flex flex-col mt-4" };
                     return view! {
                         <div class=wrap>
@@ -124,6 +130,7 @@ pub fn Sidebar(
                                         "flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors border-l-[3px] border-transparent".to_string()
                                     }
                                 }
+                                aria-current=move || if active_path.get() == href_cmp2 { Some("page") } else { None }
                             >
                                 {icon.map(|ic| view! { <span aria-hidden="true"><Icon icon=Signal::derive(move || ic) attr:class="w-4 h-4 shrink-0" /></span> })}
                                 <span class="truncate">{label}</span>
@@ -174,6 +181,7 @@ pub fn Sidebar(
                                         let label = item.label.clone();
                                         let icon = item.icon;
                                         let badge = item.badge.clone();
+                                        let href_cmp2 = href_cmp.clone();
                                         view! {
                                             <a
                                                 href=href_attr
@@ -187,6 +195,7 @@ pub fn Sidebar(
                                                         "flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors border-l-[3px] border-transparent".to_string()
                                                     }
                                                 }
+                                                aria-current=move || if active_path.get() == href_cmp2 { Some("page") } else { None }
                                             >
                                                 {icon.map(|ic| view! { <span aria-hidden="true"><Icon icon=Signal::derive(move || ic) attr:class="w-4 h-4 shrink-0" /></span> })}
                                                 <span class="truncate">{label}</span>

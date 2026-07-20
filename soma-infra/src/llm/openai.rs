@@ -454,7 +454,9 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
         let stream_options = if self.use_azure_auth {
             None
         } else {
-            Some(OaiStreamOptions { include_usage: true })
+            Some(OaiStreamOptions {
+                include_usage: true,
+            })
         };
         let body = OaiRequest {
             model: req.model.clone(),
@@ -1160,7 +1162,9 @@ data: [DONE]\n\
             max_tokens: Some(256),
             max_completion_tokens: None,
             stream: true,
-            stream_options: Some(OaiStreamOptions { include_usage: true }),
+            stream_options: Some(OaiStreamOptions {
+                include_usage: true,
+            }),
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(

@@ -62,7 +62,7 @@ fn build_slices(
         .enumerate()
         .map(|(i, p)| {
             let frac = p.value / total;
-            let sweep = frac * sweep_total;
+            let sweep = (frac * sweep_total).min(2.0 * std::f64::consts::PI - 1e-3);
             let end = angle + sweep;
             let (x1, y1, x2, y2, large) = arc_path(CX, CY, R, angle, end);
             let path = format!(
@@ -88,7 +88,7 @@ fn build_donut_slices(
         .enumerate()
         .map(|(i, p)| {
             let frac = p.value / total;
-            let sweep = frac * sweep_total;
+            let sweep = (frac * sweep_total).min(2.0 * std::f64::consts::PI - 1e-3);
             let end = angle + sweep;
 
             let (ox1, oy1, ox2, oy2, large) = arc_path(CX, CY, R, angle, end);
