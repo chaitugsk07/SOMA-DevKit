@@ -46,7 +46,6 @@ use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
-use uuid::Uuid;
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -129,7 +128,7 @@ pub enum IamClientError {
 // ── Inner state ───────────────────────────────────────────────────────────────
 
 struct Inner {
-    keys: HashMap<Uuid, DecodingKey>,
+    keys: HashMap<String, DecodingKey>,
     /// When keys were last successfully fetched. `None` = never.
     last_fetched: Option<Instant>,
     /// When we last attempted a refresh (success or failure). Controls cooldown.
@@ -186,6 +185,53 @@ impl JwksVerifier {
         Ok(Self::new(JwksConfig::from_env()?))
     }
 
+    /// Create a verifier with pre-loaded keys and mark the cache as fresh.
+    ///
+    /// Keys are considered freshly fetched at construction time — no refresh will be
+    /// attempted until the 15-minute TTL elapses. Useful for tests and static
+    /// configurations where keys are known ahead of time.
+    pub fn with_preloaded_keys(cfg: JwksConfig, keys: HashMap<String, DecodingKey>) -> Self {
+        let now = Instant::now();
+        Self {
+            cfg,
+            inner: Arc::new(RwLock::new(Inner {
+                keys,
+                last_fetched: Some(now),
+                last_refresh_attempt: Some(now),
+            })),
+            refresh_mu: Arc::new(Mutex::new(())),
+        }
+    }
+
+    /// Look up the decoding key for `kid` without running full JWT validation.
+    ///
+    /// Triggers a JWKS refresh if the cache is stale (> 15 min) or empty. Returns
+    /// [`IamClientError::InvalidToken`] when `kid` is not present after refresh.
+    ///
+    /// Use this when you need to supply your own [`jsonwebtoken::Validation`] (e.g.
+    /// to accept multiple algorithms). For standard single-algorithm verification,
+    /// prefer [`JwksVerifier::verify`].
+    pub async fn get_key(&self, kid: &str) -> Result<DecodingKey, IamClientError> {
+        let needs_refresh = {
+            let inner = self.inner.read().await;
+            inner
+                .last_fetched
+                .map_or(true, |t| t.elapsed().as_secs() > STALENESS_SECS)
+        };
+        if needs_refresh {
+            self.try_refresh().await;
+        }
+        let inner = self.inner.read().await;
+        if inner.keys.is_empty() {
+            return Err(IamClientError::CacheEmpty);
+        }
+        inner
+            .keys
+            .get(kid)
+            .cloned()
+            .ok_or_else(|| IamClientError::InvalidToken(format!("unknown kid: {kid:?}")))
+    }
+
     /// Eagerly fetch and cache keys. Call once at service startup to avoid the
     /// first-request latency spike.
     ///
@@ -233,16 +279,13 @@ impl JwksVerifier {
         // Decode header unauthenticated to get kid. The `alg` field is IGNORED.
         let header =
             decode_header(token).map_err(|e| IamClientError::InvalidToken(e.to_string()))?;
-        let kid_str = header
+        let kid = header
             .kid
             .ok_or_else(|| IamClientError::InvalidToken("missing kid header".into()))?;
-        let kid: Uuid = kid_str
-            .parse()
-            .map_err(|_| IamClientError::InvalidToken(format!("kid is not a UUID: {kid_str:?}")))?;
         let dk = inner
             .keys
             .get(&kid)
-            .ok_or_else(|| IamClientError::InvalidToken(format!("unknown kid: {kid}")))?;
+            .ok_or_else(|| IamClientError::InvalidToken(format!("unknown kid: {kid:?}")))?;
 
         // SECURITY: algorithm pinned to ES256; the token header's alg is never trusted.
         let mut validation = Validation::new(Algorithm::ES256);
@@ -309,7 +352,7 @@ impl JwksVerifier {
         }
     }
 
-    async fn fetch_keys(&self) -> Result<HashMap<Uuid, DecodingKey>, IamClientError> {
+    async fn fetch_keys(&self) -> Result<HashMap<String, DecodingKey>, IamClientError> {
         use jsonwebtoken::jwk::JwkSet;
 
         let client = crate::http::client()
@@ -327,10 +370,7 @@ impl JwksVerifier {
 
         let mut map = HashMap::with_capacity(jwk_set.keys.len());
         for jwk in &jwk_set.keys {
-            let kid_str = jwk.common.key_id.as_deref().unwrap_or("");
-            let kid: Uuid = kid_str.parse().map_err(|_| {
-                IamClientError::FetchError(format!("JWK kid not a UUID: {kid_str:?}"))
-            })?;
+            let kid = jwk.common.key_id.as_deref().unwrap_or("").to_owned();
             let dk = DecodingKey::from_jwk(jwk)
                 .map_err(|e| IamClientError::FetchError(format!("DecodingKey: {e}")))?;
             map.insert(kid, dk);
@@ -518,6 +558,7 @@ mod tests {
     use rand::rngs::OsRng;
     use serde::{Deserialize, Serialize};
     use std::time::{SystemTime, UNIX_EPOCH};
+    use uuid::Uuid;
 
     // ── Test key helpers ──────────────────────────────────────────────────────
 
@@ -545,16 +586,11 @@ mod tests {
     /// Build a verifier with pre-loaded keys (no network needed for verify tests).
     fn verifier_with_key(dk: DecodingKey, kid: Uuid, iss: &str, aud: &str) -> JwksVerifier {
         let mut keys = HashMap::new();
-        keys.insert(kid, dk);
-        JwksVerifier {
-            cfg: JwksConfig::new("http://unused.test/jwks.json", iss, aud),
-            inner: Arc::new(RwLock::new(Inner {
-                keys,
-                last_fetched: Some(Instant::now()),
-                last_refresh_attempt: Some(Instant::now()),
-            })),
-            refresh_mu: Arc::new(Mutex::new(())),
-        }
+        keys.insert(kid.to_string(), dk);
+        JwksVerifier::with_preloaded_keys(
+            JwksConfig::new("http://unused.test/jwks.json", iss, aud),
+            keys,
+        )
     }
 
     fn now_secs() -> usize {
