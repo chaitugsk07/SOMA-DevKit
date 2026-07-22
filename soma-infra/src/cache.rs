@@ -162,6 +162,41 @@ pub async fn expire(
     Ok(existed)
 }
 
+/// PUBLISH a message to a Redis channel.
+///
+/// Takes the `ConnectionManager` by value (callers clone before passing).
+/// Use the existing `ConnectionManager` for publishing; subscribing requires a
+/// dedicated connection via [`open_subscriber`].
+pub async fn publish(
+    mut cm: redis::aio::ConnectionManager,
+    channel: &str,
+    message: &[u8],
+) -> Result<(), CacheError> {
+    let _: i64 = redis::cmd("PUBLISH")
+        .arg(channel)
+        .arg(message)
+        .query_async(&mut cm)
+        .await?;
+    Ok(())
+}
+
+/// Open a dedicated async pub/sub connection and subscribe to `channel`.
+///
+/// The returned `PubSub` is in subscribe mode — it cannot issue other Redis
+/// commands. Drive it with `into_on_message()` to receive messages, and
+/// reconnect by calling [`open_subscriber`] again after the stream ends.
+///
+/// Use [`publish`] with the shared `ConnectionManager` for the publishing side.
+pub async fn open_subscriber(
+    redis_url: &str,
+    channel: &str,
+) -> Result<redis::aio::PubSub, CacheError> {
+    let client = redis::Client::open(redis_url)?;
+    let mut pubsub = client.get_async_pubsub().await?;
+    pubsub.subscribe(channel).await?;
+    Ok(pubsub)
+}
+
 /// `SET key value EX ttl_secs NX` — atomically set if not exists, with a TTL.
 ///
 /// Returns `true` when the key was newly written (first hit); `false` when it
