@@ -22,7 +22,7 @@ fn arc_point(angle_deg: f64) -> (f64, f64) {
 fn full_arc_d() -> String {
     let (sx, sy) = arc_point(START_DEG);
     let (ex, ey) = arc_point(START_DEG + SWEEP_DEG); // 405° = 45°
-    // large_arc=1 (270° > 180°), sweep=1 (clockwise in SVG)
+                                                     // large_arc=1 (270° > 180°), sweep=1 (clockwise in SVG)
     format!("M{sx:.2},{sy:.2} A{RADIUS:.1},{RADIUS:.1} 0 1,1 {ex:.2},{ey:.2}")
 }
 
@@ -47,7 +47,8 @@ pub fn RiskGauge(
     /// Risk score, 0–100 (clamped defensively).
     value: u32,
     /// Optional label shown below the numeric value.
-    #[prop(optional, into)] label: Option<String>,
+    #[prop(optional, into)]
+    label: Option<String>,
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     let value = value.min(100);

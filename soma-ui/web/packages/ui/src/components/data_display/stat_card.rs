@@ -8,11 +8,14 @@ pub fn StatCard(
     #[prop(into)] label: String,
     #[prop(into)] value: String,
     /// Optional severity that colors the top accent bar.
-    #[prop(optional)] accent: Option<Severity>,
+    #[prop(optional)]
+    accent: Option<Severity>,
     /// Optional delta string (e.g. "+12%", "3 new").
-    #[prop(optional)] delta: Option<String>,
+    #[prop(optional)]
+    delta: Option<String>,
     /// When true, delta renders green (↑); when false, red (↓).
-    #[prop(default = false)] delta_positive: bool,
+    #[prop(default = false)]
+    delta_positive: bool,
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     let accent_bar = accent.map(|sev| {

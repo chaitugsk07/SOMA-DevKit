@@ -9,9 +9,11 @@ pub fn IssueCard(
     severity: Severity,
     #[prop(into)] title: String,
     /// Short meta string: service name, resource type, time, etc.
-    #[prop(optional, into)] meta: Option<String>,
+    #[prop(optional, into)]
+    meta: Option<String>,
     /// Whether the card is expanded by default.
-    #[prop(default = false)] default_open: bool,
+    #[prop(default = false)]
+    default_open: bool,
     #[prop(default = String::new())] class: String,
     children: ChildrenFn,
 ) -> impl IntoView {

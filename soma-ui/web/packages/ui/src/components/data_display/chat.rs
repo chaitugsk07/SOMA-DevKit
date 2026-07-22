@@ -30,10 +30,7 @@ pub fn ChatThread(
 }
 
 #[component]
-pub fn ChatMessage(
-    #[prop(into)] role: String,
-    children: Children,
-) -> impl IntoView {
+pub fn ChatMessage(#[prop(into)] role: String, children: Children) -> impl IntoView {
     let is_user = role == "user";
     let wrapper_class = if is_user {
         "flex flex-col items-end self-end"

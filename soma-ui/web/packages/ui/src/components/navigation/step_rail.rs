@@ -8,7 +8,10 @@ pub fn StepRail(
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     let n = steps.len();
-    let outer = format!("grid overflow-hidden rounded-md border border-border {}", class);
+    let outer = format!(
+        "grid overflow-hidden rounded-md border border-border {}",
+        class
+    );
     let cols = format!("grid-template-columns: repeat({}, 1fr);", n);
 
     view! {

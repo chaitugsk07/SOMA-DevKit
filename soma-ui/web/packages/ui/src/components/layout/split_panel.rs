@@ -7,7 +7,10 @@ pub fn SplitPanel(
     left: AnyView,
     right: AnyView,
 ) -> impl IntoView {
-    let combined = format!("grid overflow-hidden border border-border rounded-[14px_3px_14px_3px] {}", class);
+    let combined = format!(
+        "grid overflow-hidden border border-border rounded-[14px_3px_14px_3px] {}",
+        class
+    );
     let style = format!("grid-template-columns: {} 1fr", left_width);
     view! {
         <div class=combined style=style>

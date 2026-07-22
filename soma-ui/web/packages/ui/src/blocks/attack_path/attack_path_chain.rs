@@ -50,7 +50,8 @@ pub fn AttackPathChain(
     #[prop(default = vec![])] nodes: Vec<ChainNode>,
     /// Arrow labels between nodes. Length should be `nodes.len() - 1`.
     /// If shorter, remaining arrows render without a label.
-    #[prop(default = vec![])] edge_labels: Vec<String>,
+    #[prop(default = vec![])]
+    edge_labels: Vec<String>,
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     let wrapper = format!("flex items-start overflow-x-auto gap-0 py-2 {}", class);

@@ -97,7 +97,8 @@ pub fn SecurityGraph(
     #[prop(default = vec![])] nodes: Vec<GraphNode>,
     #[prop(default = vec![])] edges: Vec<GraphEdge>,
     /// Called with the clicked node's `id`. `Callback<String>` is `Copy` — capture freely.
-    #[prop(optional)] on_node_click: Option<Callback<String>>,
+    #[prop(optional)]
+    on_node_click: Option<Callback<String>>,
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     // ── Reactive pan / zoom ───────────────────────────────────────────────────

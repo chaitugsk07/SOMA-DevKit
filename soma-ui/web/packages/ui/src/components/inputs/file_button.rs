@@ -12,7 +12,8 @@ pub fn FileButton(
     #[prop(default = String::new())] class: String,
     children: Children,
 ) -> impl IntoView {
-    let variant_class = "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground";
+    let variant_class =
+        "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground";
     let size_class = "h-8 px-3 text-xs";
 
     let disabled_class = disabled_cls(disabled);

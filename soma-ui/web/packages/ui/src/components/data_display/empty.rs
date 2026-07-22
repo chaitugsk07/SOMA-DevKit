@@ -26,9 +26,11 @@ pub fn Empty(
     #[prop(optional)] description: Option<String>,
     /// Optional icon rendered above the title. Pass a closure:
     /// `icon=|| view! { <svg>…</svg> }.into_any()`.
-    #[prop(optional, into)] icon: Option<EmptyIcon>,
+    #[prop(optional, into)]
+    icon: Option<EmptyIcon>,
     /// Optional CTA content (e.g. a Button) rendered below the description.
-    #[prop(optional)] children: Option<Children>,
+    #[prop(optional)]
+    children: Option<Children>,
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     let combined = format!(

@@ -72,10 +72,7 @@ pub fn FilterBar(
         })
         .collect();
 
-    let bar = format!(
-        "flex flex-wrap items-center gap-3 {}",
-        class
-    );
+    let bar = format!("flex flex-wrap items-center gap-3 {}", class);
 
     view! {
         <div class=bar>

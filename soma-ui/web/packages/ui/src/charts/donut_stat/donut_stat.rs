@@ -19,7 +19,11 @@ fn arc_path(cx: f64, cy: f64, r: f64, angle: f64, end: f64) -> (f64, f64, f64, f
     let y1 = cy + r * angle.sin();
     let x2 = cx + r * end.cos();
     let y2 = cy + r * end.sin();
-    let large = if (end - angle).abs() > std::f64::consts::PI { 1 } else { 0 };
+    let large = if (end - angle).abs() > std::f64::consts::PI {
+        1
+    } else {
+        0
+    };
     (x1, y1, x2, y2, large)
 }
 
@@ -29,7 +33,8 @@ fn arc_path(cx: f64, cy: f64, r: f64, angle: f64, end: f64) -> (f64, f64, f64, f
 pub fn DonutStat(
     #[prop(default = vec![])] items: Vec<DonutItem>,
     /// Text shown in the donut center (defaults to the sum of all values).
-    #[prop(optional, into)] center_label: Option<String>,
+    #[prop(optional, into)]
+    center_label: Option<String>,
     #[prop(default = String::new())] class: String,
 ) -> impl IntoView {
     let total: u32 = items.iter().map(|i| i.value).sum();

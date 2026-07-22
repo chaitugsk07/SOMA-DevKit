@@ -70,7 +70,10 @@ pub fn TabsTrigger(
                     FOCUS_RING_INSET, CONTROL_MOTION
                 );
                 if is_active {
-                    format!("{} bg-background text-foreground shadow-elev-sm {}", base, extra)
+                    format!(
+                        "{} bg-background text-foreground shadow-elev-sm {}",
+                        base, extra
+                    )
                 } else {
                     format!("{} hover:bg-muted/50 hover:text-foreground {}", base, extra)
                 }
@@ -103,7 +106,13 @@ pub fn TabsTrigger(
             }
         }
     };
-    let selected = move || if active.get() == val.get_value() { "true" } else { "false" };
+    let selected = move || {
+        if active.get() == val.get_value() {
+            "true"
+        } else {
+            "false"
+        }
+    };
     match href {
         Some(target) => view! {
             <a
