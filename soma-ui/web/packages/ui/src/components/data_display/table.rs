@@ -99,7 +99,7 @@ pub fn TableCell(
         TableDensity::Comfortable => "p-3",
         TableDensity::Compact => "p-2 text-xs",
     };
-    let combined = format!("{} align-middle {}", padding, class);
+    let combined = format!("{} align-middle text-foreground {}", padding, class);
     view! { <td class=combined>{children()}</td> }
 }
 

@@ -21,7 +21,7 @@ pub fn HoverCardTrigger(children: Children) -> impl IntoView {
 #[component]
 pub fn HoverCardContent(children: Children) -> impl IntoView {
     view! {
-        <div class="absolute z-50 top-full mt-2 w-64 rounded-md border border-border bg-card p-4 shadow-elev-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
+        <div class="absolute z-50 top-full mt-2 w-64 rounded-md border border-border bg-card text-card-foreground p-4 shadow-elev-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
             {children()}
         </div>
     }

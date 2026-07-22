@@ -16,7 +16,7 @@ pub fn ConsoleShell(
     let topbar = StoredValue::new(topbar);
     let sidebar_footer = StoredValue::new(sidebar_footer);
     let root_class = format!(
-        "flex h-screen min-h-0 bg-background overflow-hidden {}",
+        "flex h-screen min-h-0 bg-background text-foreground overflow-hidden {}",
         class
     );
 

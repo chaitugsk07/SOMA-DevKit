@@ -85,7 +85,7 @@ pub fn DialogContent(children: Children) -> impl IntoView {
                 aria-modal="true"
                 aria-labelledby=a11y.title_id
                 tabindex="-1"
-                class="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-elev-lg animate-scale-in pointer-events-auto focus:outline-none"
+                class="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg border border-border bg-card text-card-foreground p-6 shadow-elev-lg animate-scale-in pointer-events-auto focus:outline-none"
             >
                 <button
                     class="absolute top-4 end-4 flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

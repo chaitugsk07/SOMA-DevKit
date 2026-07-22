@@ -43,7 +43,8 @@ pub fn SheetContent(children: Children) -> impl IntoView {
     let close = move |_| open.set(false);
 
     let panel_class = move || {
-        let base = "fixed z-50 bg-card border-border flex flex-col shadow-elev-lg";
+        let base =
+            "fixed z-50 bg-card text-card-foreground border-border flex flex-col shadow-elev-lg";
         match side.get_value() {
             SheetSide::Right => {
                 format!("{base} inset-y-0 end-0 h-full w-80 border-s animate-slide-left")

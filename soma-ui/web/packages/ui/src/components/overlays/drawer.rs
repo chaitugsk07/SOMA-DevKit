@@ -23,7 +23,7 @@ pub fn Drawer(#[prop(into)] open: RwSignal<bool>, children: ChildrenFn) -> impl 
 #[component]
 pub fn DrawerContent(children: Children) -> impl IntoView {
     view! {
-        <div class="fixed inset-x-0 bottom-0 z-50 rounded-t-xl border-t border-border bg-card p-6 shadow-elev-lg animate-slide-up max-h-[85vh] overflow-auto">
+        <div class="fixed inset-x-0 bottom-0 z-50 rounded-t-xl border-t border-border bg-card text-card-foreground p-6 shadow-elev-lg animate-slide-up max-h-[85vh] overflow-auto">
             <div class="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
             {children()}
         </div>

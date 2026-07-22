@@ -5,12 +5,12 @@ use leptos::prelude::*;
 #[component]
 pub fn Textarea(
     value: RwSignal<String>,
-    #[prop(default = String::new())] placeholder: String,
+    #[prop(into, default = String::new())] placeholder: String,
     #[prop(default = 3)] rows: i32,
     #[prop(default = false)] disabled: bool,
     #[prop(optional)] leading_icon: Option<icondata::Icon>,
     #[prop(optional)] trailing_icon: Option<icondata::Icon>,
-    #[prop(default = String::new())] class: String,
+    #[prop(into, default = String::new())] class: String,
 ) -> impl IntoView {
     let disabled_class = disabled_cls(disabled);
     let ps = if leading_icon.is_some() { " ps-8" } else { "" };

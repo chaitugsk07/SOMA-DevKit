@@ -5,13 +5,13 @@ use leptos::prelude::*;
 #[component]
 pub fn Input(
     #[prop(optional)] id: Option<String>,
-    #[prop(default = "text".to_string())] input_type: String,
-    #[prop(default = String::new())] placeholder: String,
+    #[prop(into, default = "text".to_string())] input_type: String,
+    #[prop(into, default = String::new())] placeholder: String,
     #[prop(default = false)] disabled: bool,
     value: RwSignal<String>,
     #[prop(optional)] leading_icon: Option<icondata::Icon>,
     #[prop(optional)] trailing_icon: Option<icondata::Icon>,
-    #[prop(default = String::new())] class: String,
+    #[prop(into, default = String::new())] class: String,
 ) -> impl IntoView {
     let disabled_class = disabled_cls(disabled);
     let ps = if leading_icon.is_some() { " ps-8" } else { "" };

@@ -58,7 +58,7 @@ pub fn ContextMenuContent(children: ChildrenFn) -> impl IntoView {
         <Show when=move || ctx.open.get()>
             <div class="fixed inset-0 z-40" on:click=close />
             <div
-                class="fixed z-50 min-w-[12rem] rounded-md border border-border bg-card p-1 shadow-elev-md animate-scale-in"
+                class="fixed z-50 min-w-[12rem] rounded-md border border-border bg-card text-card-foreground p-1 shadow-elev-md animate-scale-in"
                 style=move || {
                     let (x, y) = ctx.pos.get();
                     format!("left:{}px;top:{}px", x, y)

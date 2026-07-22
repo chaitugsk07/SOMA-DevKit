@@ -77,7 +77,7 @@ pub fn AlertDialogContent(children: Children) -> impl IntoView {
             aria-labelledby=a11y.title_id
             aria-describedby=a11y.description_id
             tabindex="-1"
-            class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-elev-lg animate-scale-in focus:outline-none"
+            class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg rounded-lg border border-border bg-card text-card-foreground p-6 shadow-elev-lg animate-scale-in focus:outline-none"
         >
             {children()}
         </div>

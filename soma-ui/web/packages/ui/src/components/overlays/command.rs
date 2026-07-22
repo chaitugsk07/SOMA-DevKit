@@ -124,7 +124,7 @@ fn CommandOverlay(
                 role="dialog"
                 aria-modal="true"
                 aria-label="Command palette"
-                class="fixed left-1/2 top-[20%] z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-card shadow-elev-lg animate-scale-in"
+                class="fixed left-1/2 top-[20%] z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-elev-lg animate-scale-in"
                 on:keydown=handle_keydown
             >
                 <div class="flex items-center gap-2 border-b border-border px-3 py-2">

@@ -112,7 +112,7 @@ pub fn MenubarContent(children: ChildrenFn) -> impl IntoView {
 
     view! {
         <Show when=is_open>
-            <div class="absolute z-50 mt-1 min-w-[12rem] rounded-md border border-border bg-card p-1 shadow-elev-md animate-scale-in">
+            <div class="absolute z-50 mt-1 min-w-[12rem] rounded-md border border-border bg-card text-card-foreground p-1 shadow-elev-md animate-scale-in">
                 {children.with_value(|c| c())}
             </div>
         </Show>

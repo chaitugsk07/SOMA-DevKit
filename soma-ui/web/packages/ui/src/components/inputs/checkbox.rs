@@ -8,10 +8,14 @@ pub fn Checkbox(
     checked: RwSignal<bool>,
     #[prop(default = false)] disabled: bool,
     #[prop(default = String::new())] class: String,
+    #[prop(optional)] on_change: Option<Callback<bool>>,
 ) -> impl IntoView {
     let on_toggle = move |_| {
         if !disabled {
             checked.update(|v| *v = !*v);
+            if let Some(cb) = on_change {
+                cb.run(checked.get_untracked());
+            }
         }
     };
     let on_key = move |e: web_sys::KeyboardEvent| {
@@ -19,6 +23,9 @@ pub fn Checkbox(
             e.prevent_default();
             if !disabled {
                 checked.update(|v| *v = !*v);
+                if let Some(cb) = on_change {
+                    cb.run(checked.get_untracked());
+                }
             }
         }
     };
@@ -33,6 +40,7 @@ pub fn Checkbox(
     );
     view! {
         <button
+            type="button"
             role="checkbox"
             aria-checked=move || if checked.get() { "true" } else { "false" }
             tabindex="0"
