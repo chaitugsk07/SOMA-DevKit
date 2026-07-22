@@ -71,77 +71,80 @@ pub fn use_toast() -> ToastHandle {
     use_context::<ToastHandle>().expect("use_toast: <Toaster> not mounted")
 }
 
-/// Provider component. Wrap your app (or a subtree) with this, then call
-/// `use_toast()` from any descendant.
+/// Context provider. Wrap your app root with this, then place `<Toaster />` inside as a
+/// sibling to (not wrapping) your router. Call `use_toast()` from any descendant.
 #[component]
-pub fn Toaster(children: ChildrenFn) -> impl IntoView {
+pub fn ToastProvider(children: ChildrenFn) -> impl IntoView {
     let queue: RwSignal<Vec<ToastItem>> = RwSignal::new(Vec::new());
     let next_id: RwSignal<usize> = RwSignal::new(0);
     let handle = ToastHandle { queue, next_id };
     provide_context(handle);
+    children()
+}
 
-    let children = StoredValue::new(children);
-
+/// Toast viewport. Place once inside `<ToastProvider>` as a sibling to (not wrapping) your
+/// app tree. Call `use_toast()` from any descendant of `<ToastProvider>`.
+#[component]
+pub fn Toaster() -> impl IntoView {
+    let handle = use_context::<ToastHandle>().expect("Toaster: <ToastProvider> not mounted");
+    let queue = handle.queue;
     view! {
-        <>
-            {children.with_value(|c| c())}
-            <Portal>
-                <div class="fixed bottom-4 end-4 z-[100] flex flex-col gap-2 pointer-events-none w-full max-w-sm">
-                    <For
-                        each=move || queue.get()
-                        key=|t| t.id
-                        children=move |item| {
-                            let id = item.id;
-                            let variant_border = match item.variant {
-                                ToastVariant::Default => "border-border",
-                                ToastVariant::Success => "border-success/50",
-                                ToastVariant::Destructive => "border-destructive/50",
-                                ToastVariant::Warning => "border-warning/50",
-                                ToastVariant::Info => "border-info/50",
-                            };
-                            let icon_view = match item.variant {
-                                ToastVariant::Default => None,
-                                ToastVariant::Success => Some(view! {
-                                    <Icon icon=Signal::derive(|| icondata::LuCheck) width="16" height="16" attr:class="text-success shrink-0 mt-0.5" />
-                                }),
-                                ToastVariant::Destructive => Some(view! {
-                                    <Icon icon=Signal::derive(|| icondata::LuX) width="16" height="16" attr:class="text-destructive shrink-0 mt-0.5" />
-                                }),
-                                ToastVariant::Warning => Some(view! {
-                                    <Icon icon=Signal::derive(|| icondata::LuTriangleAlert) width="16" height="16" attr:class="text-warning shrink-0 mt-0.5" />
-                                }),
-                                ToastVariant::Info => Some(view! {
-                                    <Icon icon=Signal::derive(|| icondata::LuInfo) width="16" height="16" attr:class="text-info shrink-0 mt-0.5" />
-                                }),
-                            };
-                            let class = format!(
-                                "pointer-events-auto flex w-full items-start gap-3 rounded-md border {} bg-card p-4 shadow-elev-lg animate-slide-up",
-                                variant_border
-                            );
-                            let title = item.title.clone();
-                            let description = item.description.clone();
-                            view! {
-                                <div class=class>
-                                    {icon_view}
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium text-foreground">{title}</p>
-                                        {description.map(|d| view! {
-                                            <p class="text-sm text-muted-foreground mt-0.5">{d}</p>
-                                        })}
-                                    </div>
-                                    <button
-                                        class=format!("flex items-center justify-center w-6 h-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent {} {}", CONTROL_MOTION, FOCUS_RING)
-                                        aria-label="Dismiss"
-                                        on:click=move |_| queue.update(|q| q.retain(|t| t.id != id))
-                                    >
-                                        <Icon icon=Signal::derive(|| icondata::LuX) width="14" height="14" />
-                                    </button>
+        <Portal>
+            <div class="fixed bottom-4 end-4 z-[100] flex flex-col gap-2 pointer-events-none w-full max-w-sm">
+                <For
+                    each=move || queue.get()
+                    key=|t| t.id
+                    children=move |item| {
+                        let id = item.id;
+                        let variant_border = match item.variant {
+                            ToastVariant::Default => "border-border",
+                            ToastVariant::Success => "border-success/50",
+                            ToastVariant::Destructive => "border-destructive/50",
+                            ToastVariant::Warning => "border-warning/50",
+                            ToastVariant::Info => "border-info/50",
+                        };
+                        let icon_view = match item.variant {
+                            ToastVariant::Default => None,
+                            ToastVariant::Success => Some(view! {
+                                <Icon icon=Signal::derive(|| icondata::LuCheck) width="16" height="16" attr:class="text-success shrink-0 mt-0.5" />
+                            }),
+                            ToastVariant::Destructive => Some(view! {
+                                <Icon icon=Signal::derive(|| icondata::LuX) width="16" height="16" attr:class="text-destructive shrink-0 mt-0.5" />
+                            }),
+                            ToastVariant::Warning => Some(view! {
+                                <Icon icon=Signal::derive(|| icondata::LuTriangleAlert) width="16" height="16" attr:class="text-warning shrink-0 mt-0.5" />
+                            }),
+                            ToastVariant::Info => Some(view! {
+                                <Icon icon=Signal::derive(|| icondata::LuInfo) width="16" height="16" attr:class="text-info shrink-0 mt-0.5" />
+                            }),
+                        };
+                        let class = format!(
+                            "pointer-events-auto flex w-full items-start gap-3 rounded-md border {} bg-card p-4 shadow-elev-lg animate-slide-up",
+                            variant_border
+                        );
+                        let title = item.title.clone();
+                        let description = item.description.clone();
+                        view! {
+                            <div class=class>
+                                {icon_view}
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-foreground">{title}</p>
+                                    {description.map(|d| view! {
+                                        <p class="text-sm text-muted-foreground mt-0.5">{d}</p>
+                                    })}
                                 </div>
-                            }
+                                <button
+                                    class=format!("flex items-center justify-center w-6 h-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent {} {}", CONTROL_MOTION, FOCUS_RING)
+                                    aria-label="Dismiss"
+                                    on:click=move |_| queue.update(|q| q.retain(|t| t.id != id))
+                                >
+                                    <Icon icon=Signal::derive(|| icondata::LuX) width="14" height="14" />
+                                </button>
+                            </div>
                         }
-                    />
-                </div>
-            </Portal>
-        </>
+                    }
+                />
+            </div>
+        </Portal>
     }
 }

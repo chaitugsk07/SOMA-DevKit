@@ -1,6 +1,6 @@
 use crate::ui::*;
 use leptos::prelude::*;
-use soma_ui::{use_toast, Button, ButtonVariant, ToastVariant, Toaster};
+use soma_ui::{use_toast, Button, ButtonVariant, ToastProvider, ToastVariant, Toaster};
 
 fn parse_toast_variant(s: &str) -> ToastVariant {
     match s {
@@ -52,11 +52,11 @@ fn ToastDemo() -> impl IntoView {
 #[component]
 pub fn ToastPage() -> impl IntoView {
     view! {
-        <Toaster>
+        <ToastProvider>
             <div class="max-w-3xl space-y-8">
                 <div>
                     <h1 class="font-heading text-3xl font-bold tracking-tight text-foreground">"Toast"</h1>
-                    <p class="text-sm text-muted-foreground mt-1">"Imperative toast notifications rendered in a portal. Auto-dismiss after 4 s. Mount "<code class="font-mono text-xs">"<Toaster>"</code>" once near your app root."</p>
+                    <p class="text-sm text-muted-foreground mt-1">"Imperative toast notifications rendered in a portal. Auto-dismiss after 4 s. Wrap your app with "<code class="font-mono text-xs">"<ToastProvider>"</code>" and place "<code class="font-mono text-xs">"<Toaster />"</code>" as a sibling to your router."</p>
                 </div>
                 <PreviewPanel>
                     <ToastDemo />
@@ -67,7 +67,8 @@ pub fn ToastPage() -> impl IntoView {
                     <AllToastVariants />
                 </div>
             </div>
-        </Toaster>
+            <Toaster />
+        </ToastProvider>
     }
 }
 
