@@ -16,6 +16,15 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 # ── Tailwind config (references the shared preset) ───────────────────────────
+# IMPORTANT — content glob: scans soma-ui sources only.
+# Do NOT add consumer paths (e.g. a consuming suite's dashboards/ directory).
+# SOMA-DevKit is a git submodule shared across multiple suites; adding a path
+# that only exists in one of them would silently break every other suite.
+#
+# If a consuming suite uses Tailwind classes that aren't in soma-ui/src/, those
+# classes will be absent from the generated CSS.  Fix: add the class (or its
+# family) to the `safelist` in theme/tailwind.preset.js, then re-run this
+# script.  See the comment block at the top of that file for the full rationale.
 cat > "$TMP/tw.config.js" << JSEOF
 const preset = require('$THEME_DIR/tailwind.preset.js');
 module.exports = {
