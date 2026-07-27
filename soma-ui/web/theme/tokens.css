@@ -1,79 +1,23 @@
 /* ─── Self-hosted fonts ─── */
-@font-face {
-  font-family: 'Outfit';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('fonts/outfit-400.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Outfit';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('fonts/outfit-500.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Outfit';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('fonts/outfit-600.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Outfit';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('fonts/outfit-700.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Rajdhani';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('fonts/rajdhani-400.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Rajdhani';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('fonts/rajdhani-500.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Rajdhani';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('fonts/rajdhani-600.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Rajdhani';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('fonts/rajdhani-700.woff2') format('woff2');
-}
 
 /* ─── Theme tokens ─── */
 :root {
-  --font-heading: 'Rajdhani', sans-serif;
-  --font-body: 'Outfit', sans-serif;
+  --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  /* LIGHT theme — warm mahogany */
-  --background: 30 38% 96%;
-  --foreground: 19 24% 13%;
-  --card: 33 43% 98%;
-  --card-foreground: 19 24% 13%;
-  --muted: 33 30% 92%;
-  --muted-foreground: 24 12% 43%;
-  --primary: 0 17% 36%;
-  --primary-foreground: 30 28% 95%;
-  --secondary: 34 28% 90%;
-  --secondary-foreground: 19 24% 18%;
-  --accent: 30 32% 89%;
-  --accent-foreground: 19 24% 18%;
+  /* LIGHT theme — neutral console */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 4%;
+  --muted: 240 5% 96%;
+  --muted-foreground: 240 4% 46%;
+  --primary: 240 6% 10%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 5% 96%;
+  --secondary-foreground: 240 6% 10%;
+  --accent: 240 5% 96%;
+  --accent-foreground: 240 6% 10%;
   --destructive: 6 66% 44%;
   --destructive-foreground: 0 0% 100%;
   --success: 160 60% 29%;
@@ -82,48 +26,48 @@
   --warning-foreground: 0 0% 100%;
   --info: 214 74% 44%;
   --info-foreground: 0 0% 100%;
-  --contrast: 34 15% 10%;
+  --contrast: 240 6% 10%;
   --contrast-foreground: 0 0% 100%;
-  --border: 34 26% 86%;
-  --input: 34 22% 85%;
-  --ring: 0 32% 46%;
+  --border: 240 6% 90%;
+  --input: 240 6% 90%;
+  --ring: 240 5% 65%;
 
-  /* Elevation shadows — black-based so they read on both themes */
-  --shadow-sm: 0 1px 2px 0 rgb(2 8 23 / 0.06), 0 1px 1px 0 rgb(2 8 23 / 0.04);
-  --shadow: 0 2px 8px -1px rgb(2 8 23 / 0.08), 0 1px 2px -1px rgb(2 8 23 / 0.06);
-  --shadow-md: 0 4px 12px -2px rgb(2 8 23 / 0.10), 0 2px 4px -2px rgb(2 8 23 / 0.06);
-  --shadow-lg: 0 12px 32px -4px rgb(2 8 23 / 0.14), 0 4px 8px -4px rgb(2 8 23 / 0.08);
+  /* Elevation shadows — softened for neutral palette; 1px-border-plus-faint-shadow aesthetic */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 1px 0 rgb(0 0 0 / 0.03);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 8px 24px -4px rgb(0 0 0 / 0.10), 0 4px 8px -4px rgb(0 0 0 / 0.06);
 }
 
 .dark {
-  /* DARK theme — warm near-black */
-  --background: 22 24% 7%;
-  --foreground: 33 30% 93%;
-  --card: 24 18% 13%;
-  --card-foreground: 33 30% 93%;
-  --muted: 24 16% 22%;
-  --muted-foreground: 28 12% 63%;
-  --primary: 9 33% 43%;
-  --primary-foreground: 30 25% 95%;
-  --secondary: 24 14% 19%;
-  --secondary-foreground: 33 30% 93%;
-  --accent: 24 16% 22%;
-  --accent-foreground: 33 30% 93%;
+  /* DARK theme — neutral near-black */
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+  --card: 240 6% 7%;
+  --card-foreground: 0 0% 98%;
+  --muted: 240 4% 16%;
+  --muted-foreground: 240 5% 65%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 6% 10%;
+  --secondary: 240 4% 16%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 240 4% 16%;
+  --accent-foreground: 0 0% 98%;
   --destructive: 6 75% 68%;
-  --destructive-foreground: 22 24% 10%;
+  --destructive-foreground: 240 6% 10%;
   --success: 160 52% 58%;
-  --success-foreground: 22 24% 10%;
+  --success-foreground: 240 6% 10%;
   --warning: 38 85% 62%;
-  --warning-foreground: 22 24% 10%;
+  --warning-foreground: 240 6% 10%;
   --info: 214 80% 70%;
-  --info-foreground: 22 24% 10%;
-  --contrast: 33 30% 93%;
-  --contrast-foreground: 22 24% 10%;
-  --border: 26 15% 26%;
-  --input: 26 16% 31%;
-  --ring: 9 52% 60%;
+  --info-foreground: 240 6% 10%;
+  --contrast: 0 0% 98%;
+  --contrast-foreground: 240 6% 10%;
+  --border: 240 4% 16%;
+  --input: 240 4% 16%;
+  --ring: 240 5% 45%;
 
-  /* Elevation shadows — deeper on dark slate so depth still reads */
+  /* Elevation shadows — deeper on dark so depth still reads */
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 1px 2px 0 rgb(0 0 0 / 0.20);
   --shadow: 0 3px 10px -1px rgb(0 0 0 / 0.38), 0 2px 4px -1px rgb(0 0 0 / 0.25);
   --shadow-md: 0 6px 16px -2px rgb(0 0 0 / 0.45), 0 3px 6px -2px rgb(0 0 0 / 0.30);

@@ -60,6 +60,15 @@ module.exports = {
         sans: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],
         heading: ["var(--font-heading)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
+      fontSize: {
+        xs:   ['0.75rem',    { lineHeight: '1.5' }],
+        sm:   ['0.8125rem',  { lineHeight: '1.5' }],
+        base: ['0.875rem',   { lineHeight: '1.5' }],
+        lg:   ['1rem',       { lineHeight: '1.4' }],
+        xl:   ['1.125rem',   { lineHeight: '1.35', letterSpacing: '-0.01em' }],
+        '2xl':['1.25rem',    { lineHeight: '1.3',  letterSpacing: '-0.01em' }],
+        '3xl':['1.5rem',     { lineHeight: '1.25', letterSpacing: '-0.01em' }],
+      },
       keyframes: {
         fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
         slideUp: { "0%": { opacity: "0", transform: "translateY(16px)" }, "100%": { opacity: "1", transform: "translateY(0)" } },

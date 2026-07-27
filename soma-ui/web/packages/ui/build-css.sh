@@ -39,7 +39,7 @@ tokens = re.sub(r'\n{3,}', '\n\n', tokens).strip()
 
 out = pathlib.Path('$TMP/tw.input.css')
 out.write_text(
-    "@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap');\n\n"
+    "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');\n\n"
     + tokens
     + "\n\n@tailwind base;\n@tailwind components;\n@tailwind utilities;\n"
 )

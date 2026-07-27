@@ -19,7 +19,7 @@ pub fn PageHeader(
             <div class="space-y-1">
                 {back_slot}
                 {eyebrow.map(|e| view! { <Eyebrow>{e}</Eyebrow> })}
-                <h1 class="font-heading text-3xl font-bold text-foreground">{title}</h1>
+                <h1 class="text-xl font-semibold text-foreground">{title}</h1>
                 {subtitle.map(|s| view! { <p class="text-sm text-muted-foreground">{s}</p> })}
             </div>
             {children.map(|c| view! { <div class="flex items-center gap-2 shrink-0">{c()}</div> })}

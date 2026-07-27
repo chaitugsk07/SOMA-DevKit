@@ -23,6 +23,9 @@ pub use analytics::{AnalyticsPanel, Dashboard, PanelDef, SomaColumn, SomaResultS
 pub mod hooks;
 pub use hooks::*;
 
+pub mod utils;
+pub use utils::*;
+
 // ── Security-CNAPP convenience aliases ────────────────────────────────────────
 /// `AppShell` is an alias for `ConsoleShell` — left-sidebar + topbar + scrollable main area.
 pub use components::layout::console_shell::ConsoleShell as AppShell;
@@ -44,7 +47,7 @@ pub use components::navigation::sidebar::SidebarItem as SidebarNavItem;
 /// Alternatively, write this string to a `.css` file and serve it via your
 /// bundler (Trunk, Vite, etc.) instead of inlining it.
 ///
-/// Fonts (Outfit, Rajdhani) are loaded from Google Fonts via `@import`.
+/// Fonts (Inter) are loaded from Google Fonts via `@import`.
 /// If you need self-hosted fonts or custom tokens, use the Tailwind path-dep
 /// workflow described in `CONSUMING.md` and regenerate with `build-css.sh`.
 pub const STYLES: &str = include_str!("../style/soma-ui.css");

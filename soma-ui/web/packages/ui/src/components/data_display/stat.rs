@@ -41,8 +41,8 @@ pub fn Stat(
     });
 
     let value_class = match size {
-        StatSize::Md => "font-heading text-3xl font-bold tabular-nums text-foreground mt-1",
-        StatSize::Sm => "font-heading text-xl font-bold tabular-nums text-foreground mt-1",
+        StatSize::Md => "text-2xl font-semibold tabular-nums text-foreground mt-1",
+        StatSize::Sm => "text-lg font-semibold tabular-nums text-foreground mt-1",
     };
 
     let icon_view = icon.map(|ic| {
@@ -58,7 +58,7 @@ pub fn Stat(
             <div class="p-4">
                 <div class="flex items-start justify-between">
                     <div>
-                        <p class="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+                        <p class="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
                         <p class=value_class>{value}</p>
                         {delta_view}
                     </div>

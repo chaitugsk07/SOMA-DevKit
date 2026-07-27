@@ -23,9 +23,9 @@ pub fn Card(
         <div class=combined>
             {match padding {
                 CardPadding::None => children().into_any(),
-                CardPadding::Sm => view! { <div class="p-4">{children()}</div> }.into_any(),
-                CardPadding::Md => view! { <div class="p-5">{children()}</div> }.into_any(),
-                CardPadding::Lg => view! { <div class="p-6">{children()}</div> }.into_any(),
+                CardPadding::Sm => view! { <div class="p-3">{children()}</div> }.into_any(),
+                CardPadding::Md => view! { <div class="p-4">{children()}</div> }.into_any(),
+                CardPadding::Lg => view! { <div class="p-5">{children()}</div> }.into_any(),
             }}
         </div>
     }
@@ -36,7 +36,7 @@ pub fn CardHeader(
     #[prop(default = String::new())] class: String,
     children: Children,
 ) -> impl IntoView {
-    let combined = format!("flex flex-col space-y-1.5 p-6 {}", class);
+    let combined = format!("flex flex-col space-y-1.5 p-4 {}", class);
     view! { <div class=combined>{children()}</div> }
 }
 
@@ -66,7 +66,7 @@ pub fn CardContent(
     #[prop(default = String::new())] class: String,
     children: Children,
 ) -> impl IntoView {
-    let combined = format!("p-6 pt-0 {}", class);
+    let combined = format!("p-4 pt-0 {}", class);
     view! { <div class=combined>{children()}</div> }
 }
 
@@ -75,6 +75,6 @@ pub fn CardFooter(
     #[prop(default = String::new())] class: String,
     children: Children,
 ) -> impl IntoView {
-    let combined = format!("flex items-center p-6 pt-0 {}", class);
+    let combined = format!("flex items-center p-4 pt-0 {}", class);
     view! { <div class=combined>{children()}</div> }
 }

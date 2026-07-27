@@ -103,7 +103,9 @@ pub fn ConsoleShell(
                 </header>
 
                 <main class="min-h-0 flex-1 overflow-y-auto">
-                    {children()}
+                    <div class="mx-auto w-full max-w-[1400px]">
+                        {children()}
+                    </div>
                 </main>
             </div>
         </div>

@@ -27,12 +27,12 @@ pub fn StatCard(
     let delta_view = delta.map(|d| {
         let (chip, prefix) = if delta_positive {
             (
-                "inline-flex items-center text-xs font-medium mt-2 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600",
+                "inline-flex items-center text-xs font-medium mt-2 px-2 py-0.5 rounded-full bg-success/10 text-success",
                 "\u{2191} ",
             )
         } else {
             (
-                "inline-flex items-center text-xs font-medium mt-2 px-2 py-0.5 rounded-full bg-red-500/10 text-red-500",
+                "inline-flex items-center text-xs font-medium mt-2 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive",
                 "\u{2193} ",
             )
         };
@@ -48,11 +48,11 @@ pub fn StatCard(
     view! {
         <div class=card>
             {accent_bar}
-            <div class="p-4">
-                <p class="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <div class="p-3">
+                <p class="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     {label}
                 </p>
-                <p class="font-heading text-3xl font-bold tabular-nums text-foreground mt-1">
+                <p class="text-2xl font-semibold tabular-nums text-foreground mt-1">
                     {value}
                 </p>
                 {delta_view}
