@@ -165,6 +165,7 @@ mod tests {
                 temperature: Some(0.2),
                 top_p: Some(0.9),
                 max_tokens: 42,
+                ..Default::default()
             })
             .await
             .unwrap();

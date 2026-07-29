@@ -11,12 +11,12 @@ use std::time::Duration;
 
 use super::adapter::{
     drain_lines, is_false, ChatRole, CompletionRequest, CompletionResponse, EmbedRequest,
-    EmbedResponse, ProviderAdapter, ProviderError, StreamEvent, ToolCall, Usage,
+    EmbedResponse, ProviderAdapter, ProviderError, ReasoningEffort, StreamEvent, ToolCall, Usage,
 };
 
 // ── Wire types (OpenAI request) ───────────────────────────────────────────────
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Default)]
 struct OaiRequest {
     model: String,
     messages: Vec<OaiMessage>,
@@ -37,6 +37,15 @@ struct OaiRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     stream_options: Option<OaiStreamOptions>,
+    /// Structured JSON output schema. Built from `CompletionRequest::json_schema`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<serde_json::Value>,
+    /// Stop sequences. Maps from `CompletionRequest::stop_sequences`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<String>>,
+    /// Reasoning effort for o-series models. Maps from `CompletionRequest::reasoning_effort`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<&'static str>,
 }
 
 #[derive(serde::Serialize)]
@@ -180,6 +189,14 @@ pub struct OpenAICompatibleAdapter {
     /// `api-key` header rather than the standard `Authorization: Bearer` scheme.
     /// Default: false.
     pub(crate) use_azure_auth: bool,
+    /// When true, omits `temperature`, `top_p`, and `stop` from the serialised
+    /// request entirely (not sent as null — not sent at all).
+    ///
+    /// Required for newer reasoning models (gpt-5.x, o-series) that reject any
+    /// non-default `temperature`/`top_p` with HTTP 400 and reject `stop`
+    /// entirely. `reasoning_effort` and `response_format` are left untouched.
+    /// Default: false.
+    pub(crate) omit_sampling_params: bool,
 }
 
 impl std::fmt::Debug for OpenAICompatibleAdapter {
@@ -190,6 +207,7 @@ impl std::fmt::Debug for OpenAICompatibleAdapter {
             .field("api_version", &self.api_version)
             .field("use_max_completion_tokens", &self.use_max_completion_tokens)
             .field("use_azure_auth", &self.use_azure_auth)
+            .field("omit_sampling_params", &self.omit_sampling_params)
             .finish()
     }
 }
@@ -217,6 +235,7 @@ impl OpenAICompatibleAdapter {
             api_version: None,
             use_max_completion_tokens: false,
             use_azure_auth: false,
+            omit_sampling_params: false,
         })
     }
 
@@ -241,6 +260,17 @@ impl OpenAICompatibleAdapter {
     /// The adapter must be constructed with a non-`None` `api_key` when Azure auth is enabled.
     pub fn with_azure_auth(mut self, yes: bool) -> Self {
         self.use_azure_auth = yes;
+        self
+    }
+
+    /// Omit `temperature`, `top_p`, and `stop` from the serialised request entirely.
+    ///
+    /// Set to `true` for newer reasoning models (gpt-5.x, o-series / Azure AI Foundry)
+    /// that reject any non-default `temperature`/`top_p` with HTTP 400 and reject
+    /// `stop` entirely. `reasoning_effort` and `response_format` are left untouched.
+    /// Default: `false`.
+    pub fn with_omit_sampling_params(mut self, yes: bool) -> Self {
+        self.omit_sampling_params = yes;
         self
     }
 
@@ -344,16 +374,43 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
             (Some(req.max_tokens), None)
         };
 
+        // ponytail: cache_system_prompt and adaptive_thinking are Anthropic-only; silently ignored.
+        let response_format = req.json_schema.as_ref().map(|schema| {
+            let name = schema["title"].as_str().unwrap_or("output").to_owned();
+            serde_json::json!({
+                "type": "json_schema",
+                "json_schema": {"name": name, "strict": true, "schema": schema}
+            })
+        });
+        // Newer reasoning models (gpt-5.x, o-series) reject non-default temperature/top_p
+        // and reject stop entirely. Omit when omit_sampling_params is set.
+        let (temperature, top_p, stop) = if self.omit_sampling_params {
+            (None, None, None)
+        } else {
+            (req.temperature, req.top_p, req.stop_sequences.clone())
+        };
+        let reasoning_effort = req.reasoning_effort.map(|e| match e {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            // ponytail: OpenAI reasoning_effort does not accept "xhigh"/"max"; clamp to
+            // "high" so callers (including Azure) setting XHigh/Max don't get a runtime error.
+            ReasoningEffort::XHigh | ReasoningEffort::Max => "high",
+        });
+
         let body = OaiRequest {
             model: req.model.clone(),
             messages,
             tools,
-            temperature: req.temperature,
-            top_p: req.top_p,
+            temperature,
+            top_p,
             max_tokens,
             max_completion_tokens,
             stream: false,
             stream_options: None,
+            response_format,
+            stop,
+            reasoning_effort,
         };
 
         let resp = self
@@ -404,6 +461,7 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
             .map(|u| Usage {
                 input_tokens: u.prompt_tokens,
                 output_tokens: u.completion_tokens,
+                ..Default::default()
             })
             .unwrap_or_default();
 
@@ -449,6 +507,30 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
             (Some(req.max_tokens), None)
         };
 
+        // ponytail: cache_system_prompt and adaptive_thinking are Anthropic-only; silently ignored.
+        let response_format = req.json_schema.as_ref().map(|schema| {
+            let name = schema["title"].as_str().unwrap_or("output").to_owned();
+            serde_json::json!({
+                "type": "json_schema",
+                "json_schema": {"name": name, "strict": true, "schema": schema}
+            })
+        });
+        // Newer reasoning models (gpt-5.x, o-series) reject non-default temperature/top_p
+        // and reject stop entirely. Omit when omit_sampling_params is set.
+        let (temperature, top_p, stop) = if self.omit_sampling_params {
+            (None, None, None)
+        } else {
+            (req.temperature, req.top_p, req.stop_sequences.clone())
+        };
+        let reasoning_effort = req.reasoning_effort.map(|e| match e {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            // ponytail: OpenAI reasoning_effort does not accept "xhigh"/"max"; clamp to
+            // "high" so callers (including Azure) setting XHigh/Max don't get a runtime error.
+            ReasoningEffort::XHigh | ReasoningEffort::Max => "high",
+        });
+
         // Azure api-versions before 2024-02-01 reject stream_options with HTTP 400.
         // Omit it when use_azure_auth is true to restore the exact pre-migration behavior.
         let stream_options = if self.use_azure_auth {
@@ -462,12 +544,15 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
             model: req.model.clone(),
             messages,
             tools,
-            temperature: req.temperature,
-            top_p: req.top_p,
+            temperature,
+            top_p,
             max_tokens,
             max_completion_tokens,
             stream: true,
             stream_options,
+            response_format,
+            stop,
+            reasoning_effort,
         };
 
         let resp = self
@@ -606,6 +691,7 @@ impl ProviderAdapter for OpenAICompatibleAdapter {
         let usage = parsed.usage.map(|u| Usage {
             input_tokens: u.prompt_tokens,
             output_tokens: u.completion_tokens,
+            ..Default::default()
         });
 
         Ok(EmbedResponse {
@@ -669,6 +755,7 @@ pub(crate) fn dispatch_openai_data(data: &str) -> Vec<Result<StreamEvent, Provid
         let usage = chunk.usage.map(|u| Usage {
             input_tokens: u.prompt_tokens,
             output_tokens: u.completion_tokens,
+            ..Default::default()
         });
         out.push(Ok(StreamEvent::Done {
             stop_reason: last_finish_reason,
@@ -725,6 +812,7 @@ mod tests {
             temperature: None,
             top_p: None,
             max_tokens: 256,
+            ..Default::default()
         }
     }
 
@@ -736,6 +824,7 @@ mod tests {
             api_version: None,
             use_max_completion_tokens: false,
             use_azure_auth: false,
+            omit_sampling_params: false,
         }
     }
 
@@ -761,6 +850,7 @@ mod tests {
             max_completion_tokens: None,
             stream: false,
             stream_options: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(json.contains("\"gpt-4o\""), "model");
@@ -804,6 +894,7 @@ mod tests {
             max_completion_tokens: None,
             stream: false,
             stream_options: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(json.contains("\"type\":\"function\""), "tool type");
@@ -860,6 +951,7 @@ data: [DONE]\n\
             max_completion_tokens: None,
             stream: false,
             stream_options: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(json.contains("\"max_tokens\":512"), "must have max_tokens");
@@ -883,6 +975,7 @@ data: [DONE]\n\
             max_completion_tokens: Some(512),
             stream: false,
             stream_options: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(
@@ -1142,11 +1235,184 @@ data: [DONE]\n\
             max_completion_tokens: None,
             stream: true,
             stream_options: None, // azure path sets None
+            ..Default::default()
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(
             !json.contains("stream_options"),
             "azure mode must not serialize stream_options: {json}"
+        );
+    }
+
+    // ── New capability wire-mapping tests ────────────────────────────────────
+
+    #[test]
+    fn openai_json_schema_serializes_response_format() {
+        let schema = serde_json::json!({
+            "title": "MyOutput",
+            "type": "object",
+            "properties": {"value": {"type": "string"}}
+        });
+        let req = CompletionRequest {
+            json_schema: Some(schema),
+            ..sample_request()
+        };
+        let adapter = make_adapter();
+        let messages = adapter.build_messages(&req);
+        let response_format = req.json_schema.as_ref().map(|s| {
+            let name = s["title"].as_str().unwrap_or("output").to_owned();
+            serde_json::json!({
+                "type": "json_schema",
+                "json_schema": {"name": name, "strict": true, "schema": s}
+            })
+        });
+        let body = OaiRequest {
+            model: req.model.clone(),
+            messages,
+            max_tokens: Some(req.max_tokens),
+            response_format,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"response_format\""),
+            "response_format must be present: {json}"
+        );
+        assert!(
+            json.contains("\"json_schema\""),
+            "response_format.type must be json_schema: {json}"
+        );
+        assert!(
+            json.contains("\"MyOutput\""),
+            "schema title must appear as name: {json}"
+        );
+        assert!(
+            json.contains("\"strict\":true"),
+            "strict must be true: {json}"
+        );
+    }
+
+    #[test]
+    fn openai_stop_sequences_serializes_as_stop() {
+        let req = CompletionRequest {
+            stop_sequences: Some(vec!["<END>".to_string()]),
+            ..sample_request()
+        };
+        let body = OaiRequest {
+            stop: req.stop_sequences.clone(),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"stop\""),
+            "stop field must be present: {json}"
+        );
+        assert!(json.contains("\"<END>\""), "stop value must appear: {json}");
+    }
+
+    #[test]
+    fn openai_reasoning_effort_serializes() {
+        // OaiRequest.reasoning_effort is &'static str — no enum conversion needed.
+        let body = OaiRequest {
+            reasoning_effort: Some("medium"),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"reasoning_effort\":\"medium\""),
+            "reasoning_effort must serialize: {json}"
+        );
+    }
+
+    #[test]
+    fn openai_reasoning_effort_xhigh_clamps_to_high() {
+        // OpenAI does not accept "xhigh"; the adapter must clamp to "high" silently.
+        use crate::llm::adapter::ReasoningEffort;
+        let req = CompletionRequest {
+            reasoning_effort: Some(ReasoningEffort::XHigh),
+            ..sample_request()
+        };
+        let effort = req.reasoning_effort.map(|e| match e {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            ReasoningEffort::XHigh | ReasoningEffort::Max => "high",
+        });
+        let body = OaiRequest {
+            reasoning_effort: effort,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"reasoning_effort\":\"high\""),
+            "XHigh must clamp to 'high' on OpenAI: {json}"
+        );
+    }
+
+    #[test]
+    fn openai_reasoning_effort_max_clamps_to_high() {
+        // OpenAI does not accept "max"; the adapter must clamp to "high" silently.
+        use crate::llm::adapter::ReasoningEffort;
+        let req = CompletionRequest {
+            reasoning_effort: Some(ReasoningEffort::Max),
+            ..sample_request()
+        };
+        let effort = req.reasoning_effort.map(|e| match e {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            ReasoningEffort::XHigh | ReasoningEffort::Max => "high",
+        });
+        let body = OaiRequest {
+            reasoning_effort: effort,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"reasoning_effort\":\"high\""),
+            "Max must clamp to 'high' on OpenAI: {json}"
+        );
+    }
+
+    #[test]
+    fn openai_cache_and_adaptive_thinking_silently_ignored() {
+        // Verify that setting Anthropic-only fields on a CompletionRequest does
+        // NOT produce an error when passed through the OpenAI adapter path.
+        // We exercise the wire-building logic (response_format / stop / reasoning_effort)
+        // to confirm none of the Anthropic-only fields surface as errors.
+        use crate::llm::adapter::ReasoningEffort;
+        let req = CompletionRequest {
+            cache_system_prompt: true,
+            adaptive_thinking: true,
+            reasoning_effort: Some(ReasoningEffort::Low),
+            ..sample_request()
+        };
+        // ponytail: cache_system_prompt and adaptive_thinking are Anthropic-only; silently ignored.
+        let reasoning_effort = req.reasoning_effort.map(|e| match e {
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            // ponytail: OpenAI reasoning_effort does not accept "xhigh"/"max"; clamp to
+            // "high" so callers (including Azure) setting XHigh/Max don't get a runtime error.
+            ReasoningEffort::XHigh | ReasoningEffort::Max => "high",
+        });
+        let body = OaiRequest {
+            reasoning_effort,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        // Should not error and should NOT emit Anthropic-specific fields
+        assert!(
+            !json.contains("cache_control"),
+            "cache_control must not appear in OAI body: {json}"
+        );
+        assert!(
+            !json.contains("adaptive"),
+            "adaptive thinking must not appear in OAI body: {json}"
+        );
+        assert!(
+            json.contains("\"reasoning_effort\":\"low\""),
+            "reasoning_effort low must serialize: {json}"
         );
     }
 
@@ -1165,6 +1431,7 @@ data: [DONE]\n\
             stream_options: Some(OaiStreamOptions {
                 include_usage: true,
             }),
+            ..Default::default()
         };
         let json = serde_json::to_string(&body).unwrap();
         assert!(
@@ -1174,6 +1441,81 @@ data: [DONE]\n\
         assert!(
             json.contains("\"include_usage\":true"),
             "stream_options.include_usage must be true: {json}"
+        );
+    }
+
+    // ── omit_sampling_params flag ────────────────────────────────────────────
+
+    #[test]
+    fn with_omit_sampling_params_builder_toggles_flag() {
+        let adapter = make_adapter();
+        assert!(!adapter.omit_sampling_params, "default is false");
+        let adapter2 = adapter.with_omit_sampling_params(true);
+        assert!(adapter2.omit_sampling_params, "flag set via builder");
+        let adapter3 = adapter2.with_omit_sampling_params(false);
+        assert!(!adapter3.omit_sampling_params, "flag cleared via builder");
+    }
+
+    #[test]
+    fn omit_sampling_params_removes_temperature_top_p_stop_from_body() {
+        // Simulate the adapter's body-building logic for a request that has all
+        // three sampling params set. With the flag on, none must appear in the
+        // serialised JSON; with it off, all three must be present.
+        let req = CompletionRequest {
+            temperature: Some(0.0),
+            top_p: Some(0.9),
+            stop_sequences: Some(vec!["<END>".to_string()]),
+            ..sample_request()
+        };
+
+        // flag ON ─ temperature, top_p, stop must be absent entirely (not null).
+        let (temperature, top_p, stop) = (None::<f32>, None::<f32>, None::<Vec<String>>);
+        let body = OaiRequest {
+            model: req.model.clone(),
+            messages: vec![],
+            temperature,
+            top_p,
+            max_tokens: Some(req.max_tokens),
+            stop,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            !json.contains("\"temperature\""),
+            "temperature must be absent when omit_sampling_params=true: {json}"
+        );
+        assert!(
+            !json.contains("\"top_p\""),
+            "top_p must be absent when omit_sampling_params=true: {json}"
+        );
+        assert!(
+            !json.contains("\"stop\""),
+            "stop must be absent when omit_sampling_params=true: {json}"
+        );
+
+        // flag OFF ─ temperature, top_p, stop must be present.
+        let (temperature, top_p, stop) = (req.temperature, req.top_p, req.stop_sequences.clone());
+        let body = OaiRequest {
+            model: req.model.clone(),
+            messages: vec![],
+            temperature,
+            top_p,
+            max_tokens: Some(req.max_tokens),
+            stop,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(
+            json.contains("\"temperature\""),
+            "temperature must be present when omit_sampling_params=false: {json}"
+        );
+        assert!(
+            json.contains("\"top_p\""),
+            "top_p must be present when omit_sampling_params=false: {json}"
+        );
+        assert!(
+            json.contains("\"stop\""),
+            "stop must be present when omit_sampling_params=false: {json}"
         );
     }
 }

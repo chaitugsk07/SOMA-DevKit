@@ -5,6 +5,7 @@
 //! in the service layer.
 
 use std::pin::Pin;
+use std::time::Duration;
 
 use super::adapter::{
     CompletionRequest, CompletionResponse, EmbedRequest, EmbedResponse, ProviderAdapter,
@@ -53,6 +54,57 @@ impl LlmRouter {
     pub async fn embed(&self, req: EmbedRequest) -> Result<EmbedResponse, ProviderError> {
         self.adapter.embed(req).await
     }
+
+    /// Non-streaming completion with bounded exponential backoff on transient failures.
+    ///
+    /// Retries on `RateLimited` (honouring `retry_after_secs`), `ProviderUnavailable`,
+    /// and `Http` transport errors.  All other errors are returned immediately.
+    ///
+    // ponytail: 4 attempts, 20 s cap — tune per workload if the service's retry
+    // tolerance differs (e.g. tighter latency budgets may prefer 2 attempts, 5 s cap).
+    pub async fn complete_with_retry(
+        &self,
+        req: CompletionRequest,
+    ) -> Result<CompletionResponse, ProviderError> {
+        const MAX_ATTEMPTS: usize = 4;
+        const BACKOFF_CAP_SECS: u64 = 20;
+
+        let mut last_err: Option<ProviderError> = None;
+        for attempt in 0..MAX_ATTEMPTS {
+            if attempt > 0 {
+                let retry_after =
+                    if let Some(ProviderError::RateLimited { retry_after_secs }) = &last_err {
+                        *retry_after_secs
+                    } else {
+                        None
+                    };
+                let secs = retry_after
+                    .unwrap_or_else(|| 1u64 << (attempt - 1).min(6))
+                    .min(BACKOFF_CAP_SECS);
+                tracing::warn!(attempt, delay_secs = secs, "LLM transient error; retrying");
+                tokio::time::sleep(Duration::from_secs(secs)).await;
+            }
+            match self.complete(req.clone()).await {
+                Ok(resp) => return Ok(resp),
+                Err(e) if is_retryable(&e) => last_err = Some(e),
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last_err.expect("loop ran at least once"))
+    }
+}
+
+/// Returns true when a `ProviderError` is transient and a retry may succeed.
+///
+/// Permanent errors (Auth, BadRequest, ContextOverflow, Malformed, NotSupported) are
+/// returned without retry — they will not resolve on their own.
+fn is_retryable(err: &ProviderError) -> bool {
+    matches!(
+        err,
+        ProviderError::RateLimited { .. }
+            | ProviderError::ProviderUnavailable
+            | ProviderError::Http(_)
+    )
 }
 
 impl std::fmt::Debug for LlmRouter {
