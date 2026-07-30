@@ -303,11 +303,16 @@ impl JwksVerifier {
 
     async fn try_refresh(&self) {
         // Fast path: cooldown check under read lock — avoids mutex contention on hot path.
+        // Only skip when keys are already populated AND the last attempt was recent.
+        // When keys are empty a concurrent caller may be fetching right now; returning
+        // early here would race past the mutex and hit an empty cache (CacheEmpty → 401).
         {
             let inner = self.inner.read().await;
-            if let Some(t) = inner.last_refresh_attempt {
-                if t.elapsed().as_secs() < COOLDOWN_SECS {
-                    return;
+            if !inner.keys.is_empty() {
+                if let Some(t) = inner.last_refresh_attempt {
+                    if t.elapsed().as_secs() < COOLDOWN_SECS {
+                        return;
+                    }
                 }
             }
         }

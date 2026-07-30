@@ -78,6 +78,61 @@ pub struct SmtpConfig {
     pub timeout: Option<Duration>,
 }
 
+impl SmtpConfig {
+    /// Build a `SmtpConfig` from environment variables, returning `None` when
+    /// `SOMA_SMTP_HOST` is unset or empty.
+    ///
+    /// | Var | Default | Notes |
+    /// |---|---|---|
+    /// | `SOMA_SMTP_HOST` | — | Required. Empty → `None`. |
+    /// | `SOMA_SMTP_PORT` | `587` | |
+    /// | `SOMA_SMTP_USERNAME` | — | Optional. |
+    /// | `SOMA_SMTP_PASSWORD_FILE` | — | File path; content used as password (leading/trailing whitespace stripped). |
+    /// | `SOMA_SMTP_PASSWORD` | — | Direct value; used when `SOMA_SMTP_PASSWORD_FILE` is unset. |
+    /// | `SOMA_SMTP_TLS` | `starttls` | `"tls"` / `"implicit"` → implicit TLS (port 465); `"none"` / `"plaintext"` → no TLS. |
+    /// | `SOMA_SMTP_TIMEOUT_SECS` | — | Integer seconds; `None` uses lettre's 60 s default. |
+    pub fn from_env() -> Option<Self> {
+        let host = std::env::var("SOMA_SMTP_HOST")
+            .ok()
+            .filter(|v| !v.is_empty())?;
+        let port = std::env::var("SOMA_SMTP_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(587u16);
+        let username = std::env::var("SOMA_SMTP_USERNAME")
+            .ok()
+            .filter(|v| !v.is_empty());
+        // File takes precedence over direct env var (matches secret-injection patterns).
+        let password = std::env::var("SOMA_SMTP_PASSWORD_FILE")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .and_then(|f| std::fs::read_to_string(f).ok())
+            .map(|s| s.trim().to_string())
+            .or_else(|| {
+                std::env::var("SOMA_SMTP_PASSWORD")
+                    .ok()
+                    .filter(|v| !v.is_empty())
+            });
+        let tls = match std::env::var("SOMA_SMTP_TLS").as_deref() {
+            Ok("tls") | Ok("implicit") => TlsMode::Tls,
+            Ok("none") | Ok("plaintext") => TlsMode::None,
+            _ => TlsMode::StartTls,
+        };
+        let timeout = std::env::var("SOMA_SMTP_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(Duration::from_secs);
+        Some(SmtpConfig {
+            host,
+            port,
+            username,
+            password,
+            tls,
+            timeout,
+        })
+    }
+}
+
 /// A raw email ready to hand to the SMTP transport.
 ///
 /// At least one of [`text`][RawEmail::text] or [`html`][RawEmail::html] must be `Some`.
@@ -717,5 +772,65 @@ cJ5Ku0OTwRtSMaseRPX+T4EfG1Caa/eunPPN4rh+CSup2BVVarOT
             matches!(result, Err(EmailError::DkimKey(_))),
             "should fail with DkimKey error for invalid PEM"
         );
+    }
+
+    /// SmtpConfig::from_env returns None when SOMA_SMTP_HOST is absent.
+    ///
+    /// Safe to run in parallel: only removes a var that should not be set in CI.
+    #[test]
+    fn smtp_config_from_env_none_without_host() {
+        // Temporarily unset to guarantee a clean state.
+        let _prev = std::env::var("SOMA_SMTP_HOST").ok();
+        std::env::remove_var("SOMA_SMTP_HOST");
+        assert!(
+            SmtpConfig::from_env().is_none(),
+            "from_env() must return None when SOMA_SMTP_HOST is unset"
+        );
+    }
+
+    /// SmtpConfig::from_env reads host + port + tls mode correctly.
+    ///
+    /// NOTE: modifies process-level env vars; run sequentially or accept rare
+    /// flakiness if the CI environment already sets SOMA_SMTP_*.
+    #[test]
+    fn smtp_config_from_env_parses_basic_fields() {
+        // Stash originals so we can restore after the test.
+        let prev_host = std::env::var("SOMA_SMTP_HOST").ok();
+        let prev_port = std::env::var("SOMA_SMTP_PORT").ok();
+        let prev_tls = std::env::var("SOMA_SMTP_TLS").ok();
+
+        std::env::set_var("SOMA_SMTP_HOST", "smtp.test.example");
+        std::env::set_var("SOMA_SMTP_PORT", "465");
+        std::env::set_var("SOMA_SMTP_TLS", "tls");
+        std::env::remove_var("SOMA_SMTP_USERNAME");
+        std::env::remove_var("SOMA_SMTP_PASSWORD");
+        std::env::remove_var("SOMA_SMTP_PASSWORD_FILE");
+        std::env::remove_var("SOMA_SMTP_TIMEOUT_SECS");
+
+        let cfg = SmtpConfig::from_env().expect("should return Some when SOMA_SMTP_HOST is set");
+        assert_eq!(cfg.host, "smtp.test.example");
+        assert_eq!(cfg.port, 465);
+        assert_eq!(
+            cfg.tls,
+            TlsMode::Tls,
+            "tls string should map to TlsMode::Tls"
+        );
+        assert!(cfg.username.is_none());
+        assert!(cfg.password.is_none());
+        assert!(cfg.timeout.is_none());
+
+        // Restore
+        match prev_host {
+            Some(v) => std::env::set_var("SOMA_SMTP_HOST", v),
+            None => std::env::remove_var("SOMA_SMTP_HOST"),
+        }
+        match prev_port {
+            Some(v) => std::env::set_var("SOMA_SMTP_PORT", v),
+            None => std::env::remove_var("SOMA_SMTP_PORT"),
+        }
+        match prev_tls {
+            Some(v) => std::env::set_var("SOMA_SMTP_TLS", v),
+            None => std::env::remove_var("SOMA_SMTP_TLS"),
+        }
     }
 }
