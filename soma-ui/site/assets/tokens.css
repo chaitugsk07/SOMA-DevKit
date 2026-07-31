@@ -1,0 +1,98 @@
+/* =========================================================
+   SOMA design tokens — canonical source of truth
+   soma-ui-site v0.1.0
+
+   Contrast verification (WCAG AA):
+     Dark bg #141009 luminance ≈ 0.002
+       text  #EDE3D2  ~15.2:1  ✓ AA+
+       muted #A89880   ~7.3:1  ✓ AA
+       amber #F0A82E  ~10.1:1  ✓ AA
+       rust  #D4621D   ~5.4:1  ✓ AA
+       ok    #7FB069   ~8.1:1  ✓ AA
+       warn  #E0A458   ~9.3:1  ✓ AA
+     Light bg #F4EDE0 luminance ≈ 0.857
+       ink   #2B2013  ~14.0:1  ✓ AA+
+       muted #6E5F4B   ~5.3:1  ✓ AA
+       amber #8A5810   ~5.2:1  ✓ AA (use for normal-weight text)
+       rust  #B7410E   ~4.8:1  ✓ AA
+       ok    #2E6B28   ~5.6:1  ✓ AA
+       warn  #8F5200   ~5.4:1  ✓ AA
+   ========================================================= */
+
+/* Dark (default) */
+:root {
+  --c-bg:       #141009;
+  --c-surface:  #1D1710;
+  --c-hairline: #382E20;
+  --c-text:     #EDE3D2;
+  --c-muted:    #A89880;
+  --c-amber:    #F0A82E;
+  --c-rust:     #D4621D;
+  --c-ok:       #7FB069;
+  --c-warn:     #E0A458;
+
+  /* Spacing scale (4px base) */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  24px;
+  --sp-6:  32px;
+  --sp-7:  48px;
+  --sp-8:  64px;
+  --sp-9:  96px;
+  --sp-10: 128px;
+
+  /* Typography */
+  --font-display: 'Fraunces', 'Garamond', 'Georgia', serif;
+  --font-mono:    'IBM Plex Mono', 'Menlo', 'Consolas', 'Courier New', monospace;
+  --font-sans:    'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+
+  /* Radius — sharp; infrastructure is precise */
+  --r-card: 2px;
+  --r-btn:  2px;
+
+  /* Transitions */
+  --t-fast: 120ms ease-out;
+  --t-med:  200ms ease-out;
+}
+
+/* Light theme via OS preference (before JS sets data-theme) */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --c-bg:       #F4EDE0;
+    --c-surface:  #EAE0CE;
+    --c-hairline: #D9CDB8;
+    --c-text:     #2B2013;
+    --c-muted:    #6E5F4B;
+    --c-amber:    #8A5810;
+    --c-rust:     #B7410E;
+    --c-ok:       #2E6B28;
+    --c-warn:     #8F5200;
+  }
+}
+
+/* Explicit overrides — JS toggle stamps data-theme on <html> */
+:root[data-theme="light"] {
+  --c-bg:       #F4EDE0;
+  --c-surface:  #EAE0CE;
+  --c-hairline: #D9CDB8;
+  --c-text:     #2B2013;
+  --c-muted:    #6E5F4B;
+  --c-amber:    #8A5810;
+  --c-rust:     #B7410E;
+  --c-ok:       #2E6B28;
+  --c-warn:     #8F5200;
+}
+
+:root[data-theme="dark"] {
+  --c-bg:       #141009;
+  --c-surface:  #1D1710;
+  --c-hairline: #382E20;
+  --c-text:     #EDE3D2;
+  --c-muted:    #A89880;
+  --c-amber:    #F0A82E;
+  --c-rust:     #D4621D;
+  --c-ok:       #7FB069;
+  --c-warn:     #E0A458;
+}

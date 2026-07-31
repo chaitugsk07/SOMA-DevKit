@@ -1,0 +1,27 @@
+[workspace]
+members = ["."]
+resolver = "2"
+
+[package]
+name = "soma-ui-site"
+version = "0.1.0"
+edition = "2021"
+description = "SSR-safe Leptos component library for the SOMA public site"
+license = "Apache-2.0"
+
+# design tokens are in assets/tokens.css — exported as TOKENS_CSS const
+# components are SSR-safe: no browser APIs, view! only
+# consuming binary decides render mode via feature unification
+
+[dependencies]
+leptos = { version = "0.8", default-features = false }
+leptos_meta = { version = "0.8", default-features = false }
+
+[profile.dev]
+debug = false
+strip = true
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
