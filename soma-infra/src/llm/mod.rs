@@ -148,7 +148,7 @@ pub struct MessagesRequest {
 #[derive(serde::Deserialize, Debug)]
 pub struct MessagesResponse {
     pub id: String,
-    pub content: Vec<ContentBlock>,
+    pub content: Vec<ResponseBlock>,
     pub stop_reason: Option<String>,
     pub usage: TokenUsage,
 }
@@ -158,7 +158,7 @@ pub struct MessagesResponse {
 /// `type` is a reserved keyword in Rust; `r#type` maps to the JSON `"type"`
 /// field via serde's raw-identifier support (no explicit rename needed).
 #[derive(serde::Deserialize, Debug)]
-pub struct ContentBlock {
+pub struct ResponseBlock {
     #[serde(rename = "type")]
     pub r#type: String,
     pub text: Option<String>,
@@ -169,6 +169,79 @@ pub struct ContentBlock {
 pub struct TokenUsage {
     pub input_tokens: u32,
     pub output_tokens: u32,
+}
+
+// ── Vision / content-block wire types ────────────────────────────────────────
+
+/// A content block for use in vision requests — either plain text or a base64 image.
+///
+/// Serializes with Anthropic's internally-tagged `"type"` field:
+/// `{"type":"text","text":"..."}` or `{"type":"image","source":{...}}`.
+/// Build instances with the [`text_block`] and [`image_block`] helpers.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlock {
+    Text { text: String },
+    Image { source: ImageSource },
+}
+
+/// Inline base64 image source for [`ContentBlock::Image`].
+///
+/// Wire format: `{"type":"base64","media_type":"image/jpeg","data":"<base64>"}`.
+/// Encoding is the caller's responsibility — this crate does not add a base64 encoder.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ImageSource {
+    /// Always `"base64"` — the only source type supported here.
+    #[serde(rename = "type")]
+    pub source_type: String,
+    /// MIME type, e.g. `"image/jpeg"` or `"image/png"`.
+    pub media_type: String,
+    /// Already-encoded base64 image bytes.
+    pub data: String,
+}
+
+/// A message in a vision request, carrying structured content blocks.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct VisionMessage {
+    pub role: Role,
+    pub content: Vec<ContentBlock>,
+}
+
+/// Request body for a vision (image + text) `POST /v1/messages` call.
+///
+/// The `timeout` field overrides the HTTP client's 30 s default (which reliably
+/// times out when sending large image batches) and is excluded from the JSON body
+/// via `#[serde(skip)]`.
+#[derive(Debug, serde::Serialize)]
+pub struct VisionRequest {
+    pub model: String,
+    pub max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+    pub messages: Vec<VisionMessage>,
+    /// Per-request HTTP timeout. Not sent on the wire.
+    #[serde(skip)]
+    pub timeout: Duration,
+}
+
+/// Build a [`ContentBlock::Text`] from any string.
+pub fn text_block(text: impl Into<String>) -> ContentBlock {
+    ContentBlock::Text { text: text.into() }
+}
+
+/// Build a [`ContentBlock::Image`] from a MIME type and already-encoded base64 data.
+///
+/// `media_type` is typically `"image/jpeg"` or `"image/png"`.
+/// Base64 encoding is the caller's responsibility (use the `base64` crate in the
+/// calling crate — soma-infra does not add an encoder dependency).
+pub fn image_block(media_type: impl Into<String>, base64_data: impl Into<String>) -> ContentBlock {
+    ContentBlock::Image {
+        source: ImageSource {
+            source_type: "base64".into(),
+            media_type: media_type.into(),
+            data: base64_data.into(),
+        },
+    }
 }
 
 // ── LlmClient ─────────────────────────────────────────────────────────────────
@@ -260,9 +333,18 @@ impl LlmClient {
             .json(req)
             .send()
             .await?;
+        self.finish_request(response).await
+    }
 
+    /// Shared status-checking and deserialization step used by both
+    /// `messages_inner` and `messages_vision`. Each caller builds its own
+    /// `RequestBuilder` (adding a per-request timeout for vision) then passes
+    /// the sent `Response` here.
+    async fn finish_request(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<MessagesResponse, LlmError> {
         let status = response.status();
-
         if status == 429 || status == 529 {
             // Parse `retry-after` header (seconds as integer) if present.
             let retry_after_secs = response
@@ -272,18 +354,52 @@ impl LlmClient {
                 .and_then(|s| s.parse::<u64>().ok());
             return Err(LlmError::RateLimited { retry_after_secs });
         }
-
         if !status.is_success() {
             let status_u16 = status.as_u16();
             let body = response.text().await.unwrap_or_default();
-            return Err(LlmError::Api {
-                status: status_u16,
-                body,
-            });
+            return Err(LlmError::Api { status: status_u16, body });
         }
+        Ok(response.json::<MessagesResponse>().await?)
+    }
 
-        let parsed = response.json::<MessagesResponse>().await?;
-        Ok(parsed)
+    /// POST a vision request (with image content blocks) to `POST /v1/messages`.
+    ///
+    /// Behaves identically to [`messages`] — same rate-limit handling, same span
+    /// recording — but accepts [`VisionRequest`] whose messages may contain
+    /// [`ContentBlock::Image`] blocks. The `timeout` field on [`VisionRequest`]
+    /// overrides the HTTP client's 30 s default for this call only.
+    pub async fn messages_vision(
+        &self,
+        req: &VisionRequest,
+    ) -> Result<MessagesResponse, LlmError> {
+        let span = tracing::info_span!(
+            "chat",
+            "gen_ai.provider.name" = "anthropic",
+            "gen_ai.operation.name" = "vision",
+            "gen_ai.request.model" = %req.model,
+            "gen_ai.usage.input_tokens" = tracing::field::Empty,
+            "gen_ai.usage.output_tokens" = tracing::field::Empty,
+        );
+        async {
+            let url = format!("{ANTHROPIC_BASE_URL}/v1/messages");
+            let response = self
+                .http
+                .post(&url)
+                .header("x-api-key", &self.api_key)
+                .header("content-type", "application/json")
+                .timeout(req.timeout)
+                .json(req)
+                .send()
+                .await?;
+            let resp = self.finish_request(response).await?;
+            tracing::Span::current()
+                .record("gen_ai.usage.input_tokens", resp.usage.input_tokens);
+            tracing::Span::current()
+                .record("gen_ai.usage.output_tokens", resp.usage.output_tokens);
+            Ok(resp)
+        }
+        .instrument(span)
+        .await
     }
 }
 
@@ -460,5 +576,48 @@ mod tests {
             let _ = LlmClient::new(_cfg);
             let _: &MessagesRequest = &req;
         }
+    }
+
+    // ── Vision / content-block serialization ──────────────────────────────────
+
+    #[test]
+    fn content_block_text_serializes_correctly() {
+        let block = text_block("hi");
+        let val = serde_json::to_value(&block).unwrap();
+        assert_eq!(val, serde_json::json!({"type": "text", "text": "hi"}));
+    }
+
+    #[test]
+    fn content_block_image_serializes_correctly() {
+        let block = image_block("image/jpeg", "AAA");
+        let val = serde_json::to_value(&block).unwrap();
+        assert_eq!(
+            val,
+            serde_json::json!({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": "AAA"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn vision_request_timeout_not_serialized() {
+        let req = VisionRequest {
+            model: "claude-opus-4-8".into(),
+            max_tokens: 1024,
+            system: None,
+            messages: vec![VisionMessage {
+                role: Role::User,
+                content: vec![text_block("hello")],
+            }],
+            timeout: Duration::from_secs(120),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(!json.contains("timeout"), "timeout must not appear in JSON");
+        assert!(!json.contains("\"system\""), "None system must be absent");
     }
 }
