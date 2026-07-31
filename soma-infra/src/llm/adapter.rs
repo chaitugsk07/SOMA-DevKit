@@ -43,8 +43,22 @@ pub struct ToolDefinition {
     pub parameters: serde_json::Value,
 }
 
+/// Reasoning effort hint for models that support extended thinking.
+#[derive(Debug, Clone, Copy)]
+pub enum ReasoningEffort {
+    Low,
+    Medium,
+    High,
+    XHigh,
+    Max,
+}
+
 /// Unified completion request — provider-agnostic.
-#[derive(Debug, Clone)]
+///
+/// New fields are `Option<T>` or `bool` so that `Default::default()` produces a
+/// no-op value on every provider — existing construction sites can append
+/// `..Default::default()` once rather than tracking every future addition.
+#[derive(Debug, Clone, Default)]
 pub struct CompletionRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
@@ -52,7 +66,19 @@ pub struct CompletionRequest {
     pub tools: Option<Vec<ToolDefinition>>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
+    /// Maximum tokens to generate. Callers must set this; default 0 is inert.
     pub max_tokens: u32,
+    /// Mark the system block as a cache breakpoint (Anthropic only).
+    /// Silently ignored on OpenAI / Azure.
+    pub cache_system_prompt: bool,
+    /// Request structured JSON output matching this schema (caller supplies full JSON Schema object).
+    pub json_schema: Option<serde_json::Value>,
+    /// Reasoning effort hint (Anthropic extended thinking / OpenAI o-series).
+    pub reasoning_effort: Option<ReasoningEffort>,
+    /// Enable adaptive thinking mode (Anthropic only). Silently ignored on OpenAI / Azure.
+    pub adaptive_thinking: bool,
+    /// Stop generation when any of these sequences are produced.
+    pub stop_sequences: Option<Vec<String>>,
 }
 
 /// A tool call emitted by the model.
@@ -68,6 +94,10 @@ pub struct ToolCall {
 pub struct Usage {
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// Tokens written to the prompt cache (Anthropic only; 0 on other providers).
+    pub cache_creation_tokens: u32,
+    /// Tokens read from the prompt cache (Anthropic only; 0 on other providers).
+    pub cache_read_tokens: u32,
 }
 
 /// Unified completion response.

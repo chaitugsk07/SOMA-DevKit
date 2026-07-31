@@ -18,7 +18,8 @@ use reqwest::header::{HeaderMap, HeaderValue};
 
 use super::adapter::{
     drain_lines, is_false, ChatRole, CompletionRequest, CompletionResponse, EmbedRequest,
-    EmbedResponse, ProviderAdapter, ProviderError, SseAcc, StreamEvent, ToolCall, Usage,
+    EmbedResponse, ProviderAdapter, ProviderError, ReasoningEffort, SseAcc, StreamEvent, ToolCall,
+    Usage,
 };
 
 const ANTHROPIC_API_VERSION: &str = "2023-06-01";
@@ -29,8 +30,10 @@ const ANTHROPIC_API_VERSION: &str = "2023-06-01";
 struct AnthropicReq {
     model: String,
     max_tokens: u32,
+    /// Either a plain JSON string (no caching) or a content-block array with
+    /// `cache_control` (when `cache_system_prompt` is set on the request).
     #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<String>,
+    system: Option<serde_json::Value>,
     messages: Vec<AnthropicMsg>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<AnthropicTool>>,
@@ -40,6 +43,28 @@ struct AnthropicReq {
     top_p: Option<f32>,
     #[serde(skip_serializing_if = "is_false")]
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_config: Option<AnthropicOutputConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<AnthropicThinking>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop_sequences: Option<Vec<String>>,
+}
+
+/// Merged structured-output + reasoning-effort config for Anthropic.
+#[derive(serde::Serialize)]
+struct AnthropicOutputConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    effort: Option<&'static str>,
+}
+
+/// Adaptive thinking toggle for Anthropic.
+#[derive(serde::Serialize)]
+struct AnthropicThinking {
+    #[serde(rename = "type")]
+    ty: &'static str,
 }
 
 #[derive(serde::Serialize)]
@@ -80,14 +105,19 @@ struct AnthropicBlock {
 struct AnthropicUsage {
     input_tokens: u32,
     output_tokens: u32,
+    #[serde(default)]
+    cache_creation_input_tokens: u32,
+    #[serde(default)]
+    cache_read_input_tokens: u32,
 }
 
 // ── Incremental SSE event dispatcher ─────────────────────────────────────────
 
 /// Dispatch one completed Anthropic SSE event into zero or more [`StreamEvent`]s.
 ///
-/// `input_tokens` is mutable state carried across events: populated from
-/// `message_start`, read in `message_delta` to build the final [`Usage`].
+/// `input_tokens`, `cache_creation_tokens`, and `cache_read_tokens` are mutable
+/// state carried across events: populated from `message_start`, forwarded in the
+/// `Done` event emitted from `message_delta`.
 ///
 /// `current_tool` tracks the `id` and `name` from the most recent
 /// `content_block_start` event with `type="tool_use"`. This state is needed
@@ -97,6 +127,8 @@ pub(crate) fn dispatch_anthropic_event(
     ev_type: Option<String>,
     data: Option<String>,
     input_tokens: &mut u32,
+    cache_creation_tokens: &mut u32,
+    cache_read_tokens: &mut u32,
     current_tool: &mut Option<(String, String)>,
 ) -> Vec<Result<StreamEvent, ProviderError>> {
     let mut out = Vec::new();
@@ -107,9 +139,11 @@ pub(crate) fn dispatch_anthropic_event(
     match ev_type.as_str() {
         "message_start" => {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&data) {
-                *input_tokens = val["message"]["usage"]["input_tokens"]
-                    .as_u64()
-                    .unwrap_or(0) as u32;
+                let usage = &val["message"]["usage"];
+                *input_tokens = usage["input_tokens"].as_u64().unwrap_or(0) as u32;
+                *cache_creation_tokens =
+                    usage["cache_creation_input_tokens"].as_u64().unwrap_or(0) as u32;
+                *cache_read_tokens = usage["cache_read_input_tokens"].as_u64().unwrap_or(0) as u32;
             }
         }
         "content_block_start" => {
@@ -162,6 +196,8 @@ pub(crate) fn dispatch_anthropic_event(
                     usage: Some(Usage {
                         input_tokens: *input_tokens,
                         output_tokens,
+                        cache_creation_tokens: *cache_creation_tokens,
+                        cache_read_tokens: *cache_read_tokens,
                     }),
                 }));
             }
@@ -233,12 +269,30 @@ impl AnthropicAdapter {
             })
             .collect();
 
-        let system = req.system.clone().or_else(|| {
-            req.messages
-                .iter()
-                .find(|m| m.role == ChatRole::System)
-                .map(|m| m.content.clone())
-        });
+        // System prompt: top-level `system` field, else first System message.
+        // When cache_system_prompt is set, emit as a content-block array with
+        // cache_control so Anthropic knows to cache at this prefix boundary.
+        // Otherwise emit as a plain JSON string (existing behavior).
+        let system = req
+            .system
+            .clone()
+            .or_else(|| {
+                req.messages
+                    .iter()
+                    .find(|m| m.role == ChatRole::System)
+                    .map(|m| m.content.clone())
+            })
+            .map(|text| {
+                if req.cache_system_prompt {
+                    serde_json::json!([{
+                        "type": "text",
+                        "text": text,
+                        "cache_control": {"type": "ephemeral"}
+                    }])
+                } else {
+                    serde_json::Value::String(text)
+                }
+            });
 
         let tools = req.tools.as_ref().map(|ts| {
             ts.iter()
@@ -250,6 +304,30 @@ impl AnthropicAdapter {
                 .collect()
         });
 
+        // Merge json_schema and reasoning_effort into a single output_config block.
+        let output_config = {
+            let format = req
+                .json_schema
+                .as_ref()
+                .map(|schema| serde_json::json!({"type": "json_schema", "schema": schema}));
+            let effort = req.reasoning_effort.map(|e| match e {
+                ReasoningEffort::Low => "low",
+                ReasoningEffort::Medium => "medium",
+                ReasoningEffort::High => "high",
+                ReasoningEffort::XHigh => "xhigh",
+                ReasoningEffort::Max => "max",
+            });
+            if format.is_none() && effort.is_none() {
+                None
+            } else {
+                Some(AnthropicOutputConfig { format, effort })
+            }
+        };
+
+        let thinking = req
+            .adaptive_thinking
+            .then_some(AnthropicThinking { ty: "adaptive" });
+
         AnthropicReq {
             model: req.model.clone(),
             max_tokens: req.max_tokens,
@@ -259,6 +337,9 @@ impl AnthropicAdapter {
             temperature: req.temperature,
             top_p: req.top_p,
             stream,
+            output_config,
+            thinking,
+            stop_sequences: req.stop_sequences.clone(),
         }
     }
 
@@ -346,6 +427,8 @@ impl ProviderAdapter for AnthropicAdapter {
             usage: Usage {
                 input_tokens: parsed.usage.input_tokens,
                 output_tokens: parsed.usage.output_tokens,
+                cache_creation_tokens: parsed.usage.cache_creation_input_tokens,
+                cache_read_tokens: parsed.usage.cache_read_input_tokens,
             },
         })
     }
@@ -401,8 +484,10 @@ impl ProviderAdapter for AnthropicAdapter {
             let mut buf: Vec<u8> = Vec::new();
             // SSE field accumulator (event: + data:) between blank-line boundaries.
             let mut acc = SseAcc::new();
-            // input_tokens from message_start, forwarded to message_delta usage.
+            // Token counts from message_start, forwarded to message_delta Done event.
             let mut input_tokens: u32 = 0;
+            let mut cache_creation_tokens: u32 = 0;
+            let mut cache_read_tokens: u32 = 0;
             // id + name from the most recent content_block_start(tool_use), used
             // by subsequent input_json_delta events to identify the tool call.
             let mut current_tool: Option<(String, String)> = None;
@@ -423,7 +508,7 @@ impl ProviderAdapter for AnthropicAdapter {
                             let line = std::mem::take(&mut buf);
                             if acc.feed(&line) {
                                 let (ev, data) = acc.take();
-                                for event in dispatch_anthropic_event(ev, data, &mut input_tokens, &mut current_tool) {
+                                for event in dispatch_anthropic_event(ev, data, &mut input_tokens, &mut cache_creation_tokens, &mut cache_read_tokens, &mut current_tool) {
                                     yield event;
                                 }
                             }
@@ -445,7 +530,7 @@ impl ProviderAdapter for AnthropicAdapter {
                             if acc.feed(&line) {
                                 // Blank line: dispatch the accumulated SSE event.
                                 let (ev, data) = acc.take();
-                                for event in dispatch_anthropic_event(ev, data, &mut input_tokens, &mut current_tool) {
+                                for event in dispatch_anthropic_event(ev, data, &mut input_tokens, &mut cache_creation_tokens, &mut cache_read_tokens, &mut current_tool) {
                                     yield event;
                                 }
                             }
@@ -475,6 +560,8 @@ pub(crate) fn parse_anthropic_sse(body: String) -> Vec<Result<StreamEvent, Provi
     let mut buf: Vec<u8> = body.into_bytes();
     let mut acc = SseAcc::new();
     let mut input_tokens: u32 = 0;
+    let mut cache_creation_tokens: u32 = 0;
+    let mut cache_read_tokens: u32 = 0;
     let mut current_tool: Option<(String, String)> = None;
 
     let lines = drain_lines(&mut buf);
@@ -485,6 +572,8 @@ pub(crate) fn parse_anthropic_sse(body: String) -> Vec<Result<StreamEvent, Provi
                 ev,
                 data,
                 &mut input_tokens,
+                &mut cache_creation_tokens,
+                &mut cache_read_tokens,
                 &mut current_tool,
             ));
         }
@@ -497,6 +586,8 @@ pub(crate) fn parse_anthropic_sse(body: String) -> Vec<Result<StreamEvent, Provi
                 ev,
                 data,
                 &mut input_tokens,
+                &mut cache_creation_tokens,
+                &mut cache_read_tokens,
                 &mut current_tool,
             ));
         }
@@ -523,6 +614,7 @@ mod tests {
             temperature: None,
             top_p: None,
             max_tokens: 512,
+            ..Default::default()
         }
     }
 
@@ -658,6 +750,8 @@ data: {\"type\":\"message_stop\"}\n\
         let mut buf: Vec<u8> = Vec::new();
         let mut acc = SseAcc::new();
         let mut input_tokens: u32 = 0;
+        let mut cache_creation_tokens: u32 = 0;
+        let mut cache_read_tokens: u32 = 0;
         let mut current_tool: Option<(String, String)> = None;
 
         for chunk in chunks {
@@ -670,6 +764,8 @@ data: {\"type\":\"message_stop\"}\n\
                         ev,
                         data,
                         &mut input_tokens,
+                        &mut cache_creation_tokens,
+                        &mut cache_read_tokens,
                         &mut current_tool,
                     ));
                 }
@@ -683,6 +779,8 @@ data: {\"type\":\"message_stop\"}\n\
                     ev,
                     data,
                     &mut input_tokens,
+                    &mut cache_creation_tokens,
+                    &mut cache_read_tokens,
                     &mut current_tool,
                 ));
             }
@@ -829,6 +927,217 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_d
             "last event should be Done(tool_use), got {:?}",
             done
         );
+    }
+
+    // ── New capability wire-mapping tests ────────────────────────────────────
+
+    #[test]
+    fn cache_system_prompt_emits_cache_control_array() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        let req = CompletionRequest {
+            system: Some("Be helpful.".to_string()),
+            cache_system_prompt: true,
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        // system must be an array with cache_control, not a plain string
+        assert!(
+            json.contains("\"cache_control\""),
+            "cache_control must be present: {json}"
+        );
+        assert!(
+            json.contains("\"ephemeral\""),
+            "cache_control type must be ephemeral: {json}"
+        );
+        assert!(
+            json.contains("\"type\":\"text\""),
+            "content block type must be text: {json}"
+        );
+        // Must NOT be the plain-string form
+        assert!(
+            !json.contains("\"system\":\"Be helpful.\""),
+            "system must not be a plain string when caching: {json}"
+        );
+    }
+
+    #[test]
+    fn no_cache_system_prompt_emits_plain_string() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        let req = sample_request(); // cache_system_prompt defaults to false
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"system\":\"You are helpful.\""),
+            "system must be a plain string when not caching: {json}"
+        );
+        assert!(
+            !json.contains("cache_control"),
+            "cache_control must be absent: {json}"
+        );
+    }
+
+    #[test]
+    fn json_schema_serializes_output_config_format() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {"name": {"type": "string"}}
+        });
+        let req = CompletionRequest {
+            json_schema: Some(schema),
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"output_config\""),
+            "output_config must be present: {json}"
+        );
+        assert!(
+            json.contains("\"json_schema\""),
+            "format.type must be json_schema: {json}"
+        );
+    }
+
+    #[test]
+    fn reasoning_effort_serializes_into_output_config_effort() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        use crate::llm::adapter::ReasoningEffort;
+        let req = CompletionRequest {
+            reasoning_effort: Some(ReasoningEffort::High),
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"effort\":\"high\""),
+            "effort must be 'high': {json}"
+        );
+    }
+
+    #[test]
+    fn reasoning_effort_xhigh_serializes_to_xhigh() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        use crate::llm::adapter::ReasoningEffort;
+        let req = CompletionRequest {
+            reasoning_effort: Some(ReasoningEffort::XHigh),
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"effort\":\"xhigh\""),
+            "effort must be 'xhigh': {json}"
+        );
+    }
+
+    #[test]
+    fn reasoning_effort_max_serializes_to_max() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        use crate::llm::adapter::ReasoningEffort;
+        let req = CompletionRequest {
+            reasoning_effort: Some(ReasoningEffort::Max),
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"effort\":\"max\""),
+            "effort must be 'max': {json}"
+        );
+    }
+
+    #[test]
+    fn adaptive_thinking_serializes_thinking_field() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        let req = CompletionRequest {
+            adaptive_thinking: true,
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"thinking\""),
+            "thinking field must be present: {json}"
+        );
+        assert!(
+            json.contains("\"adaptive\""),
+            "thinking.type must be adaptive: {json}"
+        );
+    }
+
+    #[test]
+    fn stop_sequences_serializes() {
+        let adapter = AnthropicAdapter {
+            http: reqwest::Client::new(),
+            api_key: "sk-test".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+        };
+        let req = CompletionRequest {
+            stop_sequences: Some(vec!["<END>".to_string(), "STOP".to_string()]),
+            ..sample_request()
+        };
+        let wire = adapter.build_request(&req, false);
+        let json = serde_json::to_string(&wire).unwrap();
+        assert!(
+            json.contains("\"stop_sequences\""),
+            "stop_sequences must be present: {json}"
+        );
+        assert!(
+            json.contains("\"<END>\""),
+            "first stop sequence must appear"
+        );
+    }
+
+    #[test]
+    fn cache_tokens_populated_in_done_event() {
+        // Verify that cache_creation_input_tokens and cache_read_input_tokens from
+        // the message_start event flow through to the Done event's Usage.
+        let chunks: &[&[u8]] = &[
+            b"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m1\",\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":500,\"cache_read_input_tokens\":200}}}\n\n",
+            b"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":5}}\n\n",
+        ];
+        let events = parse_chunks(chunks);
+        assert_eq!(events.len(), 1, "expected exactly 1 Done event");
+        match &events[0] {
+            Ok(StreamEvent::Done { usage, .. }) => {
+                let u = usage.expect("usage must be present");
+                assert_eq!(u.input_tokens, 10);
+                assert_eq!(u.cache_creation_tokens, 500);
+                assert_eq!(u.cache_read_tokens, 200);
+                assert_eq!(u.output_tokens, 5);
+            }
+            other => panic!("expected Done, got {:?}", other),
+        }
     }
 
     #[tokio::test]

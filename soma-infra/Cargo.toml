@@ -36,7 +36,7 @@ storage-azure = ["dep:object_store", "object_store/azure", "dep:bytes", "dep:thi
 # Purpose: integration tests without MinIO + homelab single-disk cold tier.
 # Env: STORAGE_BACKEND="fs", STORAGE_FS_ROOT=<absolute-path>.
 storage-fs    = ["dep:object_store", "object_store/fs",    "dep:bytes", "dep:thiserror"]
-llm = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:thiserror", "dep:tokio", "dep:async-trait", "dep:futures-core", "dep:async-stream", "dep:tracing"]
+llm = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:thiserror", "dep:tokio", "tokio/time", "dep:async-trait", "dep:futures-core", "dep:async-stream", "dep:tracing"]
 llm-tiktoken = ["llm", "dep:tiktoken-rs"]
 http = ["dep:reqwest"]
 signal = ["dep:tokio", "tokio/signal"]
