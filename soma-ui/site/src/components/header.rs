@@ -11,7 +11,7 @@ use leptos::prelude::*;
 /// logo (e.g. `badge="BETA"`). Omit to render no chip.
 #[component]
 pub fn SiteHeader(
-    /// Current path for active-link highlighting (e.g. "/en/blog")
+    /// Current path for active-link highlighting (e.g. "/blog")
     #[prop(optional, into)]
     current_path: String,
     /// Optional badge label rendered next to the logo (e.g. "BETA").
@@ -25,7 +25,7 @@ pub fn SiteHeader(
     view! {
         <header class="site-header">
             <div class="container site-header__inner">
-                <a href="/en" class="site-header__logo" aria-label="SOMA home">
+                <a href="/" class="site-header__logo" aria-label="SOMA home">
                     <span class="logo-word">"soma"</span>
                     <span class="logo-cursor" aria-hidden="true">"_"</span>
                 </a>
