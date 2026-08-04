@@ -221,6 +221,79 @@ pub async fn set_nx_ex(
     Ok(result.is_some())
 }
 
+// ── Rate-limit primitive ──────────────────────────────────────────────────────
+
+/// Lua script: atomic INCR + conditional EXPIRE for fixed-window rate limiting.
+///
+/// **Algorithm: fixed window.**  The window starts on first hit and lasts
+/// `ARGV[1]` seconds.  A caller that times requests to straddle a window
+/// boundary can pass up to `2 * limit` in the worst case (e.g. limit requests
+/// at the very end of one window, limit more at the very start of the next).
+/// For a brute-force guard this is an acceptable trade-off: the window boundary
+/// is anchored to the first hit, not a clock second, so an adversary cannot
+/// predict when the window resets.  The absolute maximum across any two adjacent
+/// windows is `2 * limit`, not unbounded.
+///
+/// **Atomicity**: INCR + EXPIRE are run together inside a single Lua eval so a
+/// crash between them cannot leave a key without a TTL (which would make the
+/// rate limit permanent).
+const RATE_LIMIT_SCRIPT: &str = r#"
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"#;
+
+/// Outcome of a single [`rate_limit`] call.
+pub struct RateLimitResult {
+    /// `true` when the caller is within the limit and the request should proceed.
+    pub allowed: bool,
+    /// Count after this increment (1-based).
+    pub count: u64,
+    /// The configured per-window limit supplied by the caller.
+    pub limit: u64,
+    /// Conservative upper bound on seconds until the window resets.
+    /// Use as the value of a `Retry-After` response header.
+    pub retry_after_secs: u64,
+}
+
+/// Fixed-window rate-limit check-and-increment.
+///
+/// Atomically increments `key` in Redis and, on the first hit in a window,
+/// sets its TTL to `window_secs`.  Returns [`RateLimitResult`] where
+/// `allowed = count <= limit`.
+///
+/// # Fail-open contract
+/// This function returns `Err(CacheError::Redis(_))` when Redis is unreachable
+/// or times out.  **Callers must decide** whether to allow or deny on error:
+/// log at `warn` and allow (fail-open) to keep auth available during a Redis
+/// blip, or deny to stay safe at the cost of availability.  The recommended
+/// choice for an auth brute-force guard is **fail-open** — see the
+/// `rate_limit_middleware` in soma-vault-api for the rationale.
+pub async fn rate_limit(
+    cm: &redis::aio::ConnectionManager,
+    key: &str,
+    limit: u64,
+    window_secs: u64,
+) -> Result<RateLimitResult, CacheError> {
+    let mut cm = cm.clone();
+    let count: i64 = redis::cmd("EVAL")
+        .arg(RATE_LIMIT_SCRIPT)
+        .arg(1) // numkeys
+        .arg(key)
+        .arg(window_secs)
+        .query_async(&mut cm)
+        .await?;
+    let count = count.max(0) as u64;
+    Ok(RateLimitResult {
+        allowed: count <= limit,
+        count,
+        limit,
+        retry_after_secs: window_secs,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,5 +353,83 @@ mod tests {
         std::env::remove_var("REDIS_URL");
         std::env::remove_var("CACHE_RESPONSE_TIMEOUT_SECS");
         std::env::remove_var("CACHE_CONNECTION_TIMEOUT_SECS");
+    }
+
+    // ── rate_limit tests — require a live Redis (REDIS_URL) ──────────────────
+    // These tests are skipped when REDIS_URL is not set so they never break
+    // the CI unit-test pass; set REDIS_URL to run them against a real server.
+
+    async fn maybe_connect() -> Option<redis::aio::ConnectionManager> {
+        let url = std::env::var("REDIS_URL").ok()?;
+        connect(&CacheConfig::new(url)).await.ok()
+    }
+
+    #[tokio::test]
+    async fn rate_limit_under_limit_allows() {
+        let Some(cm) = maybe_connect().await else {
+            return;
+        };
+        // Use a unique key to avoid test cross-contamination.
+        let key = format!("test:rate_limit:under:{}", uuid_key());
+        for i in 1..=5u64 {
+            let r = rate_limit(&cm, &key, 10, 60).await.unwrap();
+            assert!(r.allowed, "request {i} should be allowed");
+            assert_eq!(r.count, i);
+        }
+        cleanup(&cm, &key).await;
+    }
+
+    #[tokio::test]
+    async fn rate_limit_over_limit_denies() {
+        let Some(cm) = maybe_connect().await else {
+            return;
+        };
+        let key = format!("test:rate_limit:over:{}", uuid_key());
+        // Fill to limit.
+        for _ in 0..10u64 {
+            rate_limit(&cm, &key, 10, 60).await.unwrap();
+        }
+        // 11th request must be denied.
+        let r = rate_limit(&cm, &key, 10, 60).await.unwrap();
+        assert!(!r.allowed, "11th request should be denied");
+        assert_eq!(r.count, 11);
+        assert_eq!(r.limit, 10);
+        assert_eq!(r.retry_after_secs, 60);
+        cleanup(&cm, &key).await;
+    }
+
+    #[tokio::test]
+    async fn rate_limit_window_expiry_resets() {
+        let Some(cm) = maybe_connect().await else {
+            return;
+        };
+        let key = format!("test:rate_limit:expiry:{}", uuid_key());
+        // Fill a 1-second window.
+        for _ in 0..10u64 {
+            rate_limit(&cm, &key, 10, 1).await.unwrap();
+        }
+        let denied = rate_limit(&cm, &key, 10, 1).await.unwrap();
+        assert!(!denied.allowed, "should be denied before window resets");
+        // Wait for the window to expire.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        // New window — counter resets.
+        let r = rate_limit(&cm, &key, 10, 1).await.unwrap();
+        assert!(r.allowed, "should be allowed after window reset");
+        assert_eq!(r.count, 1, "count should reset to 1 in new window");
+        cleanup(&cm, &key).await;
+    }
+
+    // Unique suffix to keep tests isolated across concurrent runs.
+    fn uuid_key() -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ns = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos();
+        format!("{:x}", ns)
+    }
+
+    async fn cleanup(cm: &redis::aio::ConnectionManager, key: &str) {
+        let _ = del(cm, key).await;
     }
 }

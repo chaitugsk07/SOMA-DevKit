@@ -34,7 +34,7 @@
 #[cfg(feature = "db")]
 pub mod db;
 #[cfg(feature = "db")]
-pub use db::{connect, connect_from_env, PoolConfig};
+pub use db::{connect, connect_from_env, schema_migrations_applied, PoolConfig};
 
 #[cfg(feature = "tracing")]
 pub mod telemetry;

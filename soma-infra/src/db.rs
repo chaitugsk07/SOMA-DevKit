@@ -87,24 +87,56 @@ pub enum DbError {
 // ponytail: these pool sizes are a sane service default. Tune `max_connections`
 // per workload and keep the fleet-wide total under Postgres `max_connections`
 // minus headroom. `sslmode=require` (Azure) works as-is via the URL + tls-rustls.
-/// Build and connect a pool from a [`PoolConfig`].
+/// Build a **lazy** pool from a [`PoolConfig`].
+///
+/// No TCP connection is opened — the first actual query opens the connection.
+/// This removes all Postgres network I/O from the boot path, so the process
+/// can listen for requests before the DB round-trip completes.
+///
+/// Migration runners need a direct (non-lazy) connection; call
+/// `connect_direct` or `PgPoolOptions::connect_with` explicitly for that.
 pub async fn connect(cfg: &PoolConfig) -> Result<PgPool, DbError> {
     let mut opts = PgConnectOptions::from_str(&cfg.url)?;
     if let Some(app) = &cfg.application_name {
         opts = opts.application_name(app);
     }
+    // connect_lazy_with: validates options but opens no TCP connection.
+    // The pool acquires a real connection on the first query.
     let pool = PgPoolOptions::new()
         .max_connections(cfg.max_connections.max(2))
         .min_connections(cfg.min_connections)
         .acquire_timeout(cfg.acquire_timeout)
         .idle_timeout(cfg.idle_timeout)
         .max_lifetime(cfg.max_lifetime)
-        .connect_with(opts)
-        .await?;
+        .connect_lazy_with(opts);
     Ok(pool)
 }
 
 /// Convenience: [`PoolConfig::from_env`] then [`connect`].
 pub async fn connect_from_env() -> Result<PgPool, DbError> {
     connect(&PoolConfig::from_env()?).await
+}
+
+/// Return `true` when `schema."00_schema_migrations"` exists and has at least
+/// one row — a quick, DDL-free readiness check.
+///
+/// Returns `false` when the table does not exist (migrations not yet applied)
+/// or when the table is empty.  Returns `Err` on unexpected DB errors.
+pub async fn schema_migrations_applied(pool: &PgPool, schema: &str) -> Result<bool, sqlx::Error> {
+    let sql = format!(
+        r#"SELECT COUNT(*) FROM "{schema}"."00_schema_migrations""#,
+        schema = schema
+    );
+    match sqlx::query_scalar::<_, i64>(&sql).fetch_one(pool).await {
+        Ok(n) => Ok(n > 0),
+        Err(e) => {
+            // 42P01 = "undefined_table" — migrations not applied yet, not an error
+            if let sqlx::Error::Database(ref de) = e {
+                if de.code().as_deref() == Some("42P01") {
+                    return Ok(false);
+                }
+            }
+            Err(e)
+        }
+    }
 }
