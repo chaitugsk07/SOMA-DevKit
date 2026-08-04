@@ -357,7 +357,10 @@ impl LlmClient {
         if !status.is_success() {
             let status_u16 = status.as_u16();
             let body = response.text().await.unwrap_or_default();
-            return Err(LlmError::Api { status: status_u16, body });
+            return Err(LlmError::Api {
+                status: status_u16,
+                body,
+            });
         }
         Ok(response.json::<MessagesResponse>().await?)
     }
@@ -368,10 +371,7 @@ impl LlmClient {
     /// recording — but accepts [`VisionRequest`] whose messages may contain
     /// [`ContentBlock::Image`] blocks. The `timeout` field on [`VisionRequest`]
     /// overrides the HTTP client's 30 s default for this call only.
-    pub async fn messages_vision(
-        &self,
-        req: &VisionRequest,
-    ) -> Result<MessagesResponse, LlmError> {
+    pub async fn messages_vision(&self, req: &VisionRequest) -> Result<MessagesResponse, LlmError> {
         let span = tracing::info_span!(
             "chat",
             "gen_ai.provider.name" = "anthropic",
@@ -392,10 +392,8 @@ impl LlmClient {
                 .send()
                 .await?;
             let resp = self.finish_request(response).await?;
-            tracing::Span::current()
-                .record("gen_ai.usage.input_tokens", resp.usage.input_tokens);
-            tracing::Span::current()
-                .record("gen_ai.usage.output_tokens", resp.usage.output_tokens);
+            tracing::Span::current().record("gen_ai.usage.input_tokens", resp.usage.input_tokens);
+            tracing::Span::current().record("gen_ai.usage.output_tokens", resp.usage.output_tokens);
             Ok(resp)
         }
         .instrument(span)
