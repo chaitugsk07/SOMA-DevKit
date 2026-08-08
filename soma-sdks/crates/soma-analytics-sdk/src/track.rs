@@ -36,6 +36,9 @@ impl fmt::Debug for WriteKey {
 ///
 /// `insert_id` (UUIDv4) and `ts` (`Utc::now()`) are stamped automatically at
 /// enqueue time; callers do not set them.
+///
+/// At least one of `user_id` or `device_id` must be a non-empty string; events
+/// that have neither are dropped in [`TrackClient::track`] with a `WARN`.
 pub struct TrackEvent {
     /// Event name, e.g. `"button_clicked"`.
     pub event_name: String,
@@ -77,21 +80,23 @@ struct Inner {
 /// # Quick start
 ///
 /// ```rust,no_run
-/// use soma_analytics_sdk::TrackClient;
-/// use soma_analytics_sdk::TrackEvent;
+/// use soma_analytics_sdk::{TrackClient, TrackEvent};
 ///
-/// // Create once at process start; clone cheaply into handlers.
-/// let client = TrackClient::new(
-///     "http://localhost:8080".into(),
-///     "wk_your-write-key".into(),
-/// );
+/// #[tokio::main]
+/// async fn main() {
+///     // Create once at process start; clone cheaply into handlers.
+///     let client = TrackClient::new(
+///         "http://localhost:8080".into(),
+///         "wk_your-write-key".into(),
+///     );
 ///
-/// client.track(TrackEvent {
-///     event_name: "button_clicked".into(),
-///     user_id: Some("user-123".into()),
-///     device_id: None,
-///     properties: serde_json::json!({ "button": "signup" }),
-/// });
+///     client.track(TrackEvent {
+///         event_name: "button_clicked".into(),
+///         user_id: Some("user-123".into()),
+///         device_id: None,
+///         properties: serde_json::json!({ "button": "signup" }),
+///     });
+/// }
 /// ```
 #[derive(Clone)]
 pub struct TrackClient(Arc<Inner>);
@@ -105,6 +110,8 @@ impl TrackClient {
     /// # Panics
     ///
     /// Panics if the `reqwest::Client` builder fails (e.g. TLS initialisation failure).
+    /// Also panics when called outside a Tokio runtime context (`tokio::spawn` requires
+    /// an active runtime).
     pub fn new(base_url: String, write_key: String) -> Self {
         let (tx, rx) = mpsc::channel(BUFFER_CAP);
         let key = WriteKey(write_key);
@@ -115,9 +122,25 @@ impl TrackClient {
     /// Enqueue `event` for delivery. Non-blocking: stamps `insert_id` and `ts`
     /// immediately, then hands off to the background flusher.
     ///
-    /// If the internal buffer is full the event is dropped and a `WARN` is
-    /// logged. Callers must not rely on delivery guarantees.
+    /// Events where both `user_id` and `device_id` are `None` or empty are dropped
+    /// immediately (the server rejects them at the batch level, which would discard
+    /// all other events in the same batch). A `WARN` is logged and the call returns.
+    ///
+    /// If the internal buffer is full the event is dropped and a `WARN` is logged.
+    /// Callers must not rely on delivery guarantees.
     pub fn track(&self, event: TrackEvent) {
+        // Identity guard: server rejects batches containing identity-less events,
+        // which would silently discard up to BATCH_SIZE-1 valid co-batched events.
+        let has_identity = event.user_id.as_deref().is_some_and(|v| !v.is_empty())
+            || event.device_id.as_deref().is_some_and(|v| !v.is_empty());
+        if !has_identity {
+            tracing::warn!(
+                "TrackClient: event '{}' dropped — needs user_id or device_id",
+                event.event_name
+            );
+            return;
+        }
+
         let wire = WireEvent {
             event_name: event.event_name,
             device_id: event.device_id,
@@ -126,8 +149,16 @@ impl TrackClient {
             ts: Utc::now(),
             properties: event.properties,
         };
-        if self.0.tx.try_send(wire).is_err() {
-            tracing::warn!("TrackClient: channel full, dropping event");
+        match self.0.tx.try_send(wire) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                tracing::warn!("TrackClient: channel full, dropping event");
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                tracing::error!(
+                    "TrackClient: flusher task has exited; all subsequent events will be dropped"
+                );
+            }
         }
     }
 }
@@ -141,21 +172,29 @@ async fn flusher(base_url: String, key: WriteKey, mut rx: mpsc::Receiver<WireEve
         .expect("reqwest client build failed");
     let mut buf: Vec<WireEvent> = Vec::with_capacity(BATCH_SIZE);
 
+    let mut ticker = tokio::time::interval(FLUSH_INTERVAL);
+    // Delay missed ticks so a slow flush does not trigger a burst of back-to-back flushes.
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
-        match tokio::time::timeout(FLUSH_INTERVAL, rx.recv()).await {
-            Ok(Some(ev)) => {
-                buf.push(ev);
-                if buf.len() >= BATCH_SIZE {
-                    flush(&http, &base_url, &key, &mut buf).await;
+        tokio::select! {
+            _ = ticker.tick() => {
+                flush(&http, &base_url, &key, &mut buf).await;
+            }
+            msg = rx.recv() => {
+                match msg {
+                    Some(ev) => {
+                        buf.push(ev);
+                        if buf.len() >= BATCH_SIZE {
+                            flush(&http, &base_url, &key, &mut buf).await;
+                        }
+                    }
+                    None => {
+                        // All TrackClient clones dropped; final flush then exit.
+                        flush(&http, &base_url, &key, &mut buf).await;
+                        break;
+                    }
                 }
-            }
-            Ok(None) => {
-                // All TrackClient clones dropped; final flush then exit.
-                flush(&http, &base_url, &key, &mut buf).await;
-                break;
-            }
-            Err(_timeout) => {
-                flush(&http, &base_url, &key, &mut buf).await;
             }
         }
     }
@@ -237,5 +276,68 @@ mod tests {
             client.track(make_event());
         }
         // Reaching here without hanging proves try_send never blocks.
+    }
+
+    /// Events with no identity (both user_id and device_id absent or empty) must be
+    /// dropped before reaching the channel — a single bad event must not poison a batch
+    /// of up to BATCH_SIZE-1 good events on the server.
+    #[tokio::test]
+    async fn identity_guard_drops_event_with_no_ids() {
+        let client = TrackClient::new("http://127.0.0.1:1".into(), "wk_test".into());
+
+        // Starting capacity: channel is empty.
+        assert_eq!(client.0.tx.capacity(), BUFFER_CAP);
+
+        // Both None — must be dropped.
+        client.track(TrackEvent {
+            event_name: "anon_no_ids".into(),
+            user_id: None,
+            device_id: None,
+            properties: serde_json::json!({}),
+        });
+        assert_eq!(
+            client.0.tx.capacity(),
+            BUFFER_CAP,
+            "None/None must not reach the channel"
+        );
+
+        // Both empty strings — must also be dropped.
+        client.track(TrackEvent {
+            event_name: "anon_empty_ids".into(),
+            user_id: Some(String::new()),
+            device_id: Some(String::new()),
+            properties: serde_json::json!({}),
+        });
+        assert_eq!(
+            client.0.tx.capacity(),
+            BUFFER_CAP,
+            "empty-string ids must not reach the channel"
+        );
+
+        // A valid event (user_id set) DOES reach the channel.
+        client.track(TrackEvent {
+            event_name: "valid_event".into(),
+            user_id: Some("u1".into()),
+            device_id: None,
+            properties: serde_json::json!({}),
+        });
+        assert_eq!(
+            client.0.tx.capacity(),
+            BUFFER_CAP - 1,
+            "valid event must be enqueued"
+        );
+
+        // A valid event (device_id set, user_id None) also reaches the channel.
+        client.track(TrackEvent {
+            event_name: "device_only".into(),
+            user_id: None,
+            device_id: Some("d1".into()),
+            properties: serde_json::json!({}),
+        });
+        assert_eq!(
+            client.0.tx.capacity(),
+            BUFFER_CAP - 2,
+            "device_id-only event must be enqueued"
+        );
     }
 }
