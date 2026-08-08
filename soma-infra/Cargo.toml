@@ -29,13 +29,13 @@ cache = ["dep:redis", "dep:thiserror", "dep:tokio"]
 crypto = ["dep:aes-gcm", "dep:argon2", "dep:zeroize", "dep:thiserror", "dep:hkdf", "dep:hmac", "dep:sha2"]
 # ponytail: object_store pinned to 0.12 — 0.13+/0.14+ require rustc ≥1.85,
 # but this crate's rust-version is 1.82. Latest 0.12.x patch: 0.12.5.
-storage-s3    = ["dep:object_store", "object_store/aws",   "dep:bytes", "dep:thiserror"]
-storage-azure = ["dep:object_store", "object_store/azure", "dep:bytes", "dep:thiserror"]
+storage-s3    = ["dep:object_store", "object_store/aws",   "dep:bytes", "dep:thiserror", "dep:tokio", "tokio/io-util"]
+storage-azure = ["dep:object_store", "object_store/azure", "dep:bytes", "dep:thiserror", "dep:tokio", "tokio/io-util"]
 # storage-fs: local filesystem cold tier via object_store::local::LocalFileSystem.
 # Requires the `fs` feature of object_store (gated behind that feature in 0.12).
 # Purpose: integration tests without MinIO + homelab single-disk cold tier.
 # Env: STORAGE_BACKEND="fs", STORAGE_FS_ROOT=<absolute-path>.
-storage-fs    = ["dep:object_store", "object_store/fs",    "dep:bytes", "dep:thiserror"]
+storage-fs    = ["dep:object_store", "object_store/fs",    "dep:bytes", "dep:thiserror", "dep:tokio", "tokio/io-util"]
 llm = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:thiserror", "dep:tokio", "tokio/time", "dep:async-trait", "dep:futures-core", "dep:async-stream", "dep:tracing"]
 llm-tiktoken = ["llm", "dep:tiktoken-rs"]
 http = ["dep:reqwest"]

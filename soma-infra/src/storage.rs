@@ -2,8 +2,10 @@
 //!
 //! Pure plumbing: configure and construct, then hand the client to the caller.
 //! No key/path naming, no prefix prepending, no retry policy (object_store
-//! retries internally), no content-type headers, no listing, no presigned URLs
+//! retries internally), no content-type headers, no presigned URLs
 //! — those belong in the service that knows what it is storing.
+//! Streaming multipart upload, ranged reads, and object-size queries are
+//! provided alongside the basic get/put/delete/list/copy operations.
 //!
 //! Build a client from an explicit config with [`StorageClient::new`] or pull
 //! it straight from the environment with [`StorageClient::from_env`].
@@ -34,7 +36,7 @@
 use std::sync::Arc;
 
 use object_store::path::Path;
-use object_store::ObjectStore;
+use object_store::{ObjectStore, WriteMultipart};
 
 // ── Send + Sync assertion ─────────────────────────────────────────────────────
 // Fails to compile if StorageClient ever loses Send+Sync (e.g. a non-Send inner
@@ -61,6 +63,9 @@ pub enum StorageError {
     /// An error returned by the object store backend.
     #[error(transparent)]
     Store(#[from] object_store::Error),
+    /// An I/O error reading the upload source stream.
+    #[error("stream read error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 // ── StorageConfig ─────────────────────────────────────────────────────────────
@@ -423,6 +428,60 @@ impl StorageClient {
     pub fn object_store(&self) -> Arc<dyn ObjectStore> {
         Arc::clone(&self.inner)
     }
+
+    /// Stream an upload from an [`AsyncRead`] source using object_store's
+    /// multipart API.  Reads the source in 8 MiB chunks, so peak memory is
+    /// bounded to roughly one chunk regardless of object size.  Returns the
+    /// total bytes written.
+    ///
+    /// [`AsyncRead`]: tokio::io::AsyncRead
+    pub async fn put_stream<R>(&self, key: &str, reader: R) -> Result<u64, StorageError>
+    where
+        R: tokio::io::AsyncRead + Unpin + Send,
+    {
+        use tokio::io::AsyncReadExt;
+
+        const CHUNK: usize = 8 * 1024 * 1024; // 8 MiB
+
+        let path = parse_key(key)?;
+        let upload = self.inner.put_multipart(&path).await?;
+        let mut w = WriteMultipart::new_with_chunk_size(upload, CHUNK);
+        let mut buf = vec![0u8; CHUNK];
+        let mut total = 0u64;
+        let mut r = reader;
+
+        loop {
+            let n = r.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            w.write(&buf[..n]);
+            total += n as u64;
+        }
+
+        w.finish().await?;
+        Ok(total)
+    }
+
+    /// Fetch a byte range of an object.
+    ///
+    /// `range` is byte-offset bounds (start inclusive, end exclusive).
+    pub async fn get_range(
+        &self,
+        key: &str,
+        range: std::ops::Range<u64>,
+    ) -> Result<bytes::Bytes, StorageError> {
+        let path = parse_key(key)?;
+        Ok(self.inner.get_range(&path, range).await?)
+    }
+
+    /// Return the byte-size of an existing object.
+    ///
+    /// Implemented via a `head` request — one round-trip, no data transferred.
+    pub async fn size(&self, key: &str) -> Result<u64, StorageError> {
+        let path = parse_key(key)?;
+        Ok(self.inner.head(&path).await?.size)
+    }
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -640,6 +699,80 @@ mod tests {
         // object_store escape hatch returns a usable Arc<dyn ObjectStore>
         let raw = client.object_store();
         let _ = raw; // just verify it compiles and type-checks
+
+        // cleanup
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── put_stream / get_range / size via Fs backend ─────────────────────────
+
+    #[cfg(feature = "storage-fs")]
+    #[tokio::test]
+    async fn fs_put_stream_get_range_size() {
+        use std::io::Cursor;
+
+        let dir = std::env::temp_dir().join(format!(
+            "soma-infra-fs-stream-{:016x}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .subsec_nanos() as u64
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = StorageConfig::Fs { root: dir.clone() };
+        let client = StorageClient::new(&cfg).unwrap();
+
+        const SIZE: usize = 20 * 1024 * 1024; // 20 MiB
+        // pseudo-random fill: XOR of byte-position layers — no extra dep
+        let data: Vec<u8> = (0..SIZE).map(|i| (i ^ (i >> 8) ^ (i >> 16)) as u8).collect();
+
+        // ── streaming upload ──────────────────────────────────────────────────
+        let n = client
+            .put_stream("video/test.bin", Cursor::new(data.clone()))
+            .await
+            .unwrap();
+        assert_eq!(n, SIZE as u64, "put_stream returned wrong byte count");
+
+        // ── size ──────────────────────────────────────────────────────────────
+        let reported = client.size("video/test.bin").await.unwrap();
+        assert_eq!(reported, SIZE as u64, "size() does not match upload");
+
+        // ── ranged reads ──────────────────────────────────────────────────────
+        let head = client.get_range("video/test.bin", 0..1024).await.unwrap();
+        assert_eq!(head.as_ref(), &data[0..1024], "head range mismatch");
+
+        let mid_start = SIZE / 2;
+        let mid = client
+            .get_range(
+                "video/test.bin",
+                mid_start as u64..(mid_start + 1024) as u64,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            mid.as_ref(),
+            &data[mid_start..mid_start + 1024],
+            "middle range mismatch"
+        );
+
+        let tail_start = SIZE - 1024;
+        let tail = client
+            .get_range("video/test.bin", tail_start as u64..SIZE as u64)
+            .await
+            .unwrap();
+        assert_eq!(
+            tail.as_ref(),
+            &data[tail_start..],
+            "tail range mismatch"
+        );
+
+        // ── full get roundtrip ────────────────────────────────────────────────
+        let full = client.get("video/test.bin").await.unwrap();
+        assert_eq!(
+            full.as_ref(),
+            data.as_slice(),
+            "full get roundtrip mismatch"
+        );
 
         // cleanup
         std::fs::remove_dir_all(&dir).ok();

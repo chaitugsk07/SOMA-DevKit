@@ -56,7 +56,7 @@ pub mod cache;
 #[cfg(feature = "crypto")]
 pub mod crypto;
 
-#[cfg(any(feature = "storage-s3", feature = "storage-azure"))]
+#[cfg(any(feature = "storage-s3", feature = "storage-azure", feature = "storage-fs"))]
 pub mod storage;
 
 #[cfg(feature = "llm")]
