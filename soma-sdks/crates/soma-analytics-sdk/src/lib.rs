@@ -51,6 +51,7 @@ pub use query::{Filter, FilterOp, Granularity, Order, RowFilter, SemanticQuery, 
 pub use track::{TrackClient, TrackEvent};
 
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use uuid::Uuid;
 
 // ── Error ─────────────────────────────────────────────────────────────────────
@@ -641,6 +642,8 @@ impl SomaClient {
     pub fn new(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
         let http = reqwest::Client::builder()
             .use_rustls_tls()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
             .build()
             .expect("reqwest client build failed");
         Self {

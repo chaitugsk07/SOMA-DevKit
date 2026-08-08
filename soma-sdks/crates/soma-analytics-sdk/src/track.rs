@@ -168,6 +168,8 @@ impl TrackClient {
 async fn flusher(base_url: String, key: WriteKey, mut rx: mpsc::Receiver<WireEvent>) {
     let http = reqwest::Client::builder()
         .use_rustls_tls()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
         .build()
         .expect("reqwest client build failed");
     let mut buf: Vec<WireEvent> = Vec::with_capacity(BATCH_SIZE);
