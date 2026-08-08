@@ -5,6 +5,7 @@ members = [
     "crates/soma-iam-sdk",
     "crates/soma-flags-core",
     "crates/soma-sdk",
+    "crates/soma-analytics-sdk",
 ]
 
 # Keep dev target/ lean: debug = false drops all debuginfo, strip removes symbols.

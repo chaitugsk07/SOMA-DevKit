@@ -1805,6 +1805,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "soma-analytics-sdk"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "soma-crypto"
 version = "0.1.0"
 dependencies = [
