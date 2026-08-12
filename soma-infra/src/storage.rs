@@ -723,8 +723,11 @@ mod tests {
         let client = StorageClient::new(&cfg).unwrap();
 
         const SIZE: usize = 20 * 1024 * 1024; // 20 MiB
+
         // pseudo-random fill: XOR of byte-position layers — no extra dep
-        let data: Vec<u8> = (0..SIZE).map(|i| (i ^ (i >> 8) ^ (i >> 16)) as u8).collect();
+        let data: Vec<u8> = (0..SIZE)
+            .map(|i| (i ^ (i >> 8) ^ (i >> 16)) as u8)
+            .collect();
 
         // ── streaming upload ──────────────────────────────────────────────────
         let n = client
@@ -760,11 +763,7 @@ mod tests {
             .get_range("video/test.bin", tail_start as u64..SIZE as u64)
             .await
             .unwrap();
-        assert_eq!(
-            tail.as_ref(),
-            &data[tail_start..],
-            "tail range mismatch"
-        );
+        assert_eq!(tail.as_ref(), &data[tail_start..], "tail range mismatch");
 
         // ── full get roundtrip ────────────────────────────────────────────────
         let full = client.get("video/test.bin").await.unwrap();
