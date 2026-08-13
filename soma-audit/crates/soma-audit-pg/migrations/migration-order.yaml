@@ -42,3 +42,10 @@ versions:
         created: "2026-06-26"
         author: "soma-audit"
         why: "Per-source ingest keys: one revocable key per (source_service, tenant_id) for source-scoped auth"
+  - version: 7
+    description: "Fix RLS tenant_isolation policy: NULLIF guards against empty-string GUC after SET LOCAL"
+    migrations:
+      - file: "20260813_01_fix-rls-nullif-tenant-id.sql"
+        created: "2026-08-13"
+        author: "soma-audit"
+        why: "SET LOCAL reverts custom GUC to empty string at tx end; IS NOT NULL passes on '', then ''::uuid raises cast error on pooled connections; NULLIF('','')=NULL so NULL::uuid=NULL — row invisible, no error"
