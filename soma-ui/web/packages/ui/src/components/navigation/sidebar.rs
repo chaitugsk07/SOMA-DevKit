@@ -30,6 +30,12 @@ pub fn Sidebar(
     #[prop(into)] active_path: Signal<String>,
     #[prop(optional)] brand: Option<AnyView>,
     #[prop(default = String::new())] class: String,
+    /// When true, renders only the nav items without the mobile shell (top bar,
+    /// spacer, and standalone drawer).  Use this when the Sidebar is embedded
+    /// inside a layout component such as ConsoleShell that manages its own
+    /// mobile drawer; the parent's click handler closes the parent drawer via
+    /// event bubbling so no explicit close-on-click is needed here.
+    #[prop(default = false)] embed: bool,
 ) -> impl IntoView {
     let drawer_open = RwSignal::new(false);
 
@@ -217,65 +223,82 @@ pub fn Sidebar(
     // Whether to render grouped or flat layout.
     let has_groups = !groups.get_value().is_empty();
 
-    view! {
-        <>
-            // Desktop sidebar — hidden below md breakpoint
-            <nav class=desktop_class>
-                {brand.map(|b| view! { <div class="flex items-center p-4 border-b border-border">{b}</div> })}
-                <div class="flex flex-col gap-0.5 p-2 flex-1 overflow-y-auto">
-                    {if has_groups {
-                        render_groups(false).into_any()
-                    } else {
-                        render_items(false).into_any()
-                    }}
-                </div>
-            </nav>
-
-            // Mobile top bar — visible only below md
-            <div class="flex md:hidden items-center justify-between px-4 h-14 bg-card border-b border-border w-full fixed top-0 start-0 z-40 shrink-0">
-                <span class="font-heading font-bold text-foreground">"Menu"</span>
-                <button
-                    class="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                    aria-label="Open navigation menu"
-                    on:click=move |_| drawer_open.set(true)
-                >
-                    <span aria-hidden="true" inner_html=hamburger_svg />
-                </button>
+    if embed {
+        // Embedded mode: render only the nav items so the parent layout
+        // (e.g. ConsoleShell) can display them inside its own mobile drawer.
+        // The parent's <nav on:click> closes its drawer via event bubbling;
+        // no explicit close-on-click needed here.
+        view! {
+            <div class="flex flex-col gap-0.5 p-2 flex-1 overflow-y-auto">
+                {if has_groups {
+                    render_groups(false).into_any()
+                } else {
+                    render_items(false).into_any()
+                }}
             </div>
+        }.into_any()
+    } else {
+        // Standalone mode: full layout with desktop nav + mobile shell.
+        view! {
+            <>
+                // Desktop sidebar — hidden below md breakpoint
+                <nav class=desktop_class>
+                    {brand.map(|b| view! { <div class="flex items-center p-4 border-b border-border">{b}</div> })}
+                    <div class="flex flex-col gap-0.5 p-2 flex-1 overflow-y-auto">
+                        {if has_groups {
+                            render_groups(false).into_any()
+                        } else {
+                            render_items(false).into_any()
+                        }}
+                    </div>
+                </nav>
 
-            // Mobile spacer so content isn't hidden under the fixed top bar
-            <div class="h-14 md:hidden shrink-0"></div>
-
-            // Mobile drawer overlay
-            <Show when=move || drawer_open.get()>
-                <div class="fixed inset-0 z-50 flex">
-                    <div
-                        class="absolute inset-0 bg-black/50"
-                        on:click=move |_| drawer_open.set(false)
-                    ></div>
-                    <nav class="relative z-10 bg-card w-60 h-full flex flex-col overflow-y-auto">
-                        <div class="p-4 border-b border-border flex items-center justify-between">
-                            <span class="font-heading font-bold text-foreground">"Menu"</span>
-                            <button
-                                class="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="Close navigation menu"
-                                on:click=move |_| drawer_open.set(false)
-                            >
-                                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-                                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="flex flex-col gap-0.5 p-2 flex-1">
-                            {if has_groups {
-                                render_groups(true).into_any()
-                            } else {
-                                render_items(true).into_any()
-                            }}
-                        </div>
-                    </nav>
+                // Mobile top bar — visible only below md
+                <div class="flex md:hidden items-center justify-between px-4 h-14 bg-card border-b border-border w-full fixed top-0 start-0 z-40 shrink-0">
+                    <span class="font-heading font-bold text-foreground">"Menu"</span>
+                    <button
+                        class="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        aria-label="Open navigation menu"
+                        on:click=move |_| drawer_open.set(true)
+                    >
+                        <span aria-hidden="true" inner_html=hamburger_svg />
+                    </button>
                 </div>
-            </Show>
-        </>
+
+                // Mobile spacer so content isn't hidden under the fixed top bar
+                <div class="h-14 md:hidden shrink-0"></div>
+
+                // Mobile drawer overlay
+                <Show when=move || drawer_open.get()>
+                    <div class="fixed inset-0 z-50 flex">
+                        <div
+                            class="absolute inset-0 bg-black/50"
+                            on:click=move |_| drawer_open.set(false)
+                        ></div>
+                        <nav class="relative z-10 bg-card w-60 h-full flex flex-col overflow-y-auto">
+                            <div class="p-4 border-b border-border flex items-center justify-between">
+                                <span class="font-heading font-bold text-foreground">"Menu"</span>
+                                <button
+                                    class="text-muted-foreground hover:text-foreground transition-colors"
+                                    aria-label="Close navigation menu"
+                                    on:click=move |_| drawer_open.set(false)
+                                >
+                                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                                        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="flex flex-col gap-0.5 p-2 flex-1">
+                                {if has_groups {
+                                    render_groups(true).into_any()
+                                } else {
+                                    render_items(true).into_any()
+                                }}
+                            </div>
+                        </nav>
+                    </div>
+                </Show>
+            </>
+        }.into_any()
     }
 }
