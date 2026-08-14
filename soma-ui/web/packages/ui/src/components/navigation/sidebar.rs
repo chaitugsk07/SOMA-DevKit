@@ -21,6 +21,9 @@ pub struct SidebarGroup {
     pub items: Vec<SidebarItem>,
     /// If true, the group starts open regardless of active-path detection.
     pub default_open: bool,
+    /// Optional URL the group header navigates to. When set, the label becomes
+    /// a link and the chevron is a separate toggle button.
+    pub href: Option<String>,
 }
 
 #[component]
@@ -111,6 +114,7 @@ pub fn Sidebar(
                 let open_sig = sigs[idx];
                 let group_label = group.label.clone();
                 let group_icon = group.icon;
+                let group_href = group.href.clone();
 
                 // A group with a single item reads as redundant (header + one item that
                 // repeats it, with an odd overlapping look). Render it as a plain
@@ -153,9 +157,41 @@ pub fn Sidebar(
                 // First group needs no top margin; the rest get spacing so groups breathe.
                 // Only classes present in the prebuilt soma-ui CSS are used here.
                 let group_wrap = if idx == 0 { "flex flex-col" } else { "flex flex-col mt-4" };
-                view! {
-                    <div class=group_wrap>
-                        // Group header — a quiet, left-aligned section label that toggles collapse.
+                // Build header: linked label + separate chevron toggle when href is set,
+                // otherwise the original single toggle-button.
+                let group_label_aria = group_label.clone();
+                let header_any: AnyView = if let Some(href) = group_href {
+                    view! {
+                        <div class="flex items-center w-full">
+                            <a
+                                href=href
+                                class="flex items-center gap-2 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors flex-1 min-w-0"
+                            >
+                                {group_icon.map(|ic| view! { <span aria-hidden="true"><Icon icon=Signal::derive(move || ic) attr:class="w-4 h-4 shrink-0 opacity-70" /></span> })}
+                                <span class="truncate">{group_label}</span>
+                            </a>
+                            <button
+                                class="px-2 py-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                aria-label=format!("Toggle {} group", group_label_aria)
+                                on:click=move |_| open_sig.update(|v| *v = !*v)
+                            >
+                                <span class=move || {
+                                    if open_sig.get() {
+                                        "shrink-0 transition-transform duration-200 rotate-180"
+                                    } else {
+                                        "shrink-0 transition-transform duration-200"
+                                    }
+                                } aria-hidden="true">
+                                    <Icon
+                                        icon=Signal::derive(|| icondata::LuChevronDown)
+                                        attr:class="w-3 h-4 opacity-50"
+                                    />
+                                </span>
+                            </button>
+                        </div>
+                    }.into_any()
+                } else {
+                    view! {
                         <button
                             class="flex items-center gap-2 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors w-full justify-start text-start"
                             on:click=move |_| open_sig.update(|v| *v = !*v)
@@ -175,6 +211,11 @@ pub fn Sidebar(
                                 />
                             </span>
                         </button>
+                    }.into_any()
+                };
+                view! {
+                    <div class=group_wrap>
+                        {header_any}
                         // Group items — indented under the header via a subtle left border rail.
                         <Show when=move || open_sig.get()>
                             <div class="flex flex-col gap-1 mt-1 ms-4 border-s border-border">
