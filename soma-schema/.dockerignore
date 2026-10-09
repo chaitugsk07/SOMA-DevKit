@@ -1,0 +1,8 @@
+# Send only what `cargo build` reads: keeps target/ (here, website/, tools/) and the
+# docs/website trees out of the build context. Add a path here if the build starts needing it.
+*
+!Cargo.toml
+!Cargo.lock
+!src
+!AGENTS.md
+!assets

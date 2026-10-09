@@ -123,9 +123,19 @@ Public API at the crate root:
 soma-schema --database-url "$DATABASE_URL" --schema soma_iam --migrations migrations up
 soma-schema --database-url "$DATABASE_URL" --schema soma_iam --migrations migrations status
 soma-schema --database-url "$DATABASE_URL" --schema soma_iam --migrations migrations down --steps 1
+# CI gate: same report as `status`, then exit 3 = migrations pending, 4 = drift
+soma-schema --database-url "$DATABASE_URL" --schema soma_iam --migrations migrations status --check
 ```
 
 `DATABASE_URL` can also be set as an environment variable; `--database-url` overrides it.
+
+`--advisory-lock-key` (env `SOMA_SCHEMA_ADVISORY_LOCK_KEY`, default `918273645`) is the CLI form of `PostgresConfig.advisory_lock_key` and applies to `up` and `down`. Pass the same per-service key the service uses itself (invariant 7 below) so a CLI run and a startup migration exclude each other. It takes a decimal `i64`; the `0x_50A_1A33` above is `84548147`:
+
+```sh
+soma-schema --database-url "$DATABASE_URL" --schema soma_iam --advisory-lock-key 84548147 --migrations migrations up
+```
+
+`status --check` exits `0` when clean, `3` when migrations are pending, `4` on drift (a checksum mismatch or an applied file missing from the manifest; drift wins over pending). Plain `status` exits `0` whenever it can read the database.
 
 ---
 

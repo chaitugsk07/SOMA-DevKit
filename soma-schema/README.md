@@ -118,6 +118,23 @@ soma-schema --database-url "$DATABASE_URL" --migrations migrations/ down --steps
 | `--migrations` | — | `migrations` | Path to migrations root |
 | `--schema` | — | (connection default) | Target schema |
 | `--table` | — | `00_schema_migrations` | Tracking table name |
+| `--advisory-lock-key` | `SOMA_SCHEMA_ADVISORY_LOCK_KEY` | `918273645` | Advisory lock key (decimal `i64`) held by `up` and `down`; use a distinct key per service when several share one database |
+
+### `status --check`
+
+`status --check` prints the same report as `status`, then exits non-zero when the database is not clean, so a CI job can gate on it:
+
+```sh
+soma-schema --database-url "$DATABASE_URL" --migrations migrations/ status --check
+```
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Nothing pending, no drift |
+| `3` | One or more migrations are pending |
+| `4` | Drift: a checksum mismatch, or an applied migration missing from the manifest (wins over pending) |
+
+Plain `status` exits `0` whenever it can read the database.
 
 ---
 

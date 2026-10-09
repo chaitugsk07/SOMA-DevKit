@@ -30,6 +30,15 @@ mod cli {
         #[arg(long)]
         table: Option<String>,
 
+        /// Advisory lock key held by `up` and `down` (default: 918273645). Use a distinct
+        /// key per service when several share one database.
+        #[arg(
+            long,
+            env = "SOMA_SCHEMA_ADVISORY_LOCK_KEY",
+            allow_negative_numbers = true
+        )]
+        advisory_lock_key: Option<i64>,
+
         #[command(subcommand)]
         command: Command,
     }
@@ -105,7 +114,12 @@ mod cli {
             steps: usize,
         },
         /// Show applied and pending migrations.
-        Status,
+        Status {
+            /// Exit 3 if migrations are pending, 4 if drift is detected (drift wins),
+            /// 0 when clean. The report is printed either way.
+            #[arg(long)]
+            check: bool,
+        },
         /// Open a visual schema + migration explorer in your browser (no database needed).
         Explorer {
             /// Output format: html or json
@@ -227,6 +241,9 @@ mod cli {
         if let Some(t) = &cli.table {
             pg_config.table = t.clone();
         }
+        if let Some(k) = cli.advisory_lock_key {
+            pg_config.advisory_lock_key = k;
+        }
 
         // 2 connections: one held for the advisory lock, one for migration work.
         let pool = PgPoolOptions::new()
@@ -249,7 +266,7 @@ mod cli {
                 migrator.down(&driver, *steps).await?;
                 println!("Reverted {} migration(s).", steps);
             }
-            Command::Status => {
+            Command::Status { check } => {
                 let status = migrator.status(&driver).await?;
                 println!("Applied ({}):", status.applied.len());
                 for a in &status.applied {
@@ -282,10 +299,32 @@ mod cli {
                         eprintln!("  - {err}");
                     }
                 }
+                if *check {
+                    // ponytail: exit directly; returning Err would print "Error: ..." and always
+                    // use code 1. Skips destructors, fine while status holds no lock; if that
+                    // changes, return the code to main() instead.
+                    std::process::exit(check_exit_code(
+                        status.pending.len(),
+                        status.drift_errors.len(),
+                    ));
+                }
             }
         }
 
         Ok(())
+    }
+
+    /// Exit code for `status --check`: 4 if drift was found (it wins, since `up` would
+    /// fail), 3 if migrations are pending, 0 when clean. Not 1 or 2: those already mean
+    /// "Error" and "clap usage error", and a gate must tell them apart.
+    fn check_exit_code(pending: usize, drift: usize) -> i32 {
+        if drift > 0 {
+            4
+        } else if pending > 0 {
+            3
+        } else {
+            0
+        }
     }
 
     fn open_in_browser(path: &std::path::Path) -> std::io::Result<()> {
@@ -309,6 +348,39 @@ mod cli {
                 .status()?;
         }
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn lock_key(args: &[&str]) -> Option<i64> {
+            Cli::try_parse_from(["soma-schema"].into_iter().chain(args.iter().copied()))
+                .expect("args should parse")
+                .advisory_lock_key
+        }
+
+        #[test]
+        fn check_exit_code_maps_clean_pending_and_drift() {
+            assert_eq!(check_exit_code(0, 0), 0);
+            assert_eq!(check_exit_code(5, 0), 3);
+            assert_eq!(check_exit_code(0, 2), 4);
+            // Drift wins over pending: `up` would fail on it.
+            assert_eq!(check_exit_code(5, 2), 4);
+        }
+
+        #[test]
+        fn advisory_lock_key_comes_from_flag_or_env() {
+            const VAR: &str = "SOMA_SCHEMA_ADVISORY_LOCK_KEY";
+            // Negative keys are valid i64s; clap rejects them without allow_negative_numbers.
+            assert_eq!(lock_key(&["--advisory-lock-key", "-42", "up"]), Some(-42));
+            std::env::set_var(VAR, "7");
+            let from_env = lock_key(&["up"]);
+            let flag_wins = lock_key(&["--advisory-lock-key", "9", "up"]);
+            std::env::remove_var(VAR);
+            assert_eq!(from_env, Some(7));
+            assert_eq!(flag_wins, Some(9));
+        }
     }
 }
 
