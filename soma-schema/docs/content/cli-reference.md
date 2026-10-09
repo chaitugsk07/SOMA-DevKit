@@ -14,6 +14,7 @@ These flags apply to every subcommand that connects to a database.
 | `--migrations <PATH>` | — | `migrations` | Path to the migrations root directory |
 | `--schema <SCHEMA>` | — | (connection default) | Target schema for the tracking table |
 | `--table <TABLE>` | — | `00_schema_migrations` | Tracking table name |
+| `--advisory-lock-key <KEY>` | `SOMA_SCHEMA_ADVISORY_LOCK_KEY` | `918273645` | Advisory lock key (decimal `i64`) held by `up` and `down`; use a distinct key per service when several share one database |
 
 `--database-url` overrides `DATABASE_URL` if both are set. The URL format is the standard libpq form: `postgres://user:password@host:5432/dbname`.
 
@@ -100,6 +101,14 @@ Output lists:
 
 Checksums are verified during `status` — a drift error will surface here before you attempt `up` or `down`.
 
+```sh
+soma-schema --database-url <URL> --migrations <PATH> status --check
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--check` | off | Print the same report, then exit `3` if migrations are pending or `4` if drift is detected (`0` when clean). For CI gates |
+
 ## `explorer`
 
 Build a self-contained visual explorer for your migrations directory — no database connection needed.
@@ -122,11 +131,15 @@ The HTML output includes a schema ERD, a version-grouped migration timeline, and
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success |
+| `0` | Success (`status --check`: nothing pending, no drift) |
 | `1` | Error (connection failure, drift, orphan, missing file, etc.) |
+| `2` | Invalid command-line arguments |
+| `3` | `status --check`: migrations are pending |
+| `4` | `status --check`: drift detected (wins over pending) |
 
 ## Environment variable summary
 
 | Variable | Used by |
 | --- | --- |
 | `DATABASE_URL` | All database-connecting subcommands |
+| `SOMA_SCHEMA_ADVISORY_LOCK_KEY` | `up` and `down` (fallback for `--advisory-lock-key`) |

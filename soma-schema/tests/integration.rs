@@ -1244,3 +1244,186 @@ async fn test_status_does_not_block_during_up() {
     assert_eq!(status.applied.len(), 1);
     guard.cleanup().await;
 }
+
+// ---------------------------------------------------------------------------
+// CLI tests: run the real `soma-schema` binary against the test database
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cli")]
+mod cli {
+    use std::path::Path;
+    use std::process::{Command, Output, Stdio};
+    use std::time::Duration;
+
+    use sqlx::{Connection, PgConnection};
+
+    use super::*;
+
+    /// `soma-schema` aimed at the test database, schema and migrations root.
+    /// Global options only: the caller appends the subcommand.
+    fn soma_schema(schema: &str, root: &Path) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_soma-schema"));
+        // Keep a key exported in the developer's shell out of the test.
+        cmd.env_remove("SOMA_SCHEMA_ADVISORY_LOCK_KEY")
+            .args(["--database-url", &test_db_url(), "--schema", schema])
+            .arg("--migrations")
+            .arg(root);
+        cmd
+    }
+
+    /// `status --check` is the CI gate: the same report as `status`, then exit 3 when
+    /// migrations are pending and 4 on drift. Plain `status` keeps exiting 0, and errors
+    /// keep their own codes (1 runtime, 2 usage) so they never read as pending or drift.
+    #[tokio::test]
+    async fn test_cli_status_check_exit_codes() {
+        let pool = make_pool().await;
+        let guard = make_schema(&pool).await;
+        let schema = guard.schema.clone();
+
+        let sql = with_schema(&migration_create_table("tbl_cli_check"), &schema);
+        let f = MigrationsFixture::build(
+            Some("SELECT 1;"),
+            &[(1, vec![("20260101_01_init.sql", &sql)])],
+            None,
+        );
+        let run = |args: &[&str]| -> Output {
+            soma_schema(&schema, &f.root)
+                .args(args)
+                .output()
+                .expect("run soma-schema")
+        };
+
+        // One pending migration.
+        let out = run(&["status", "--check"]);
+        assert_eq!(out.status.code(), Some(3), "pending must fail --check");
+        assert!(
+            String::from_utf8_lossy(&out.stdout).contains("Pending (1):"),
+            "--check still prints the report"
+        );
+        assert_eq!(run(&["status"]).status.code(), Some(0), "plain status");
+
+        // Applied: clean.
+        assert_eq!(run(&["up"]).status.code(), Some(0));
+        assert_eq!(run(&["status", "--check"]).status.code(), Some(0));
+
+        // Edit the applied file: drift.
+        std::fs::write(
+            f.root
+                .join("01_migrated")
+                .join("1")
+                .join("20260101_01_init.sql"),
+            format!("{sql}\n-- drift"),
+        )
+        .unwrap();
+        let out = run(&["status", "--check"]);
+        assert_eq!(out.status.code(), Some(4), "drift must fail --check");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("drift detected"));
+
+        // A runtime error (no manifest here) and a usage error (typo) are neither.
+        let missing = f.root.join("missing");
+        let out = soma_schema(&schema, &missing)
+            .args(["status", "--check"])
+            .output()
+            .expect("run soma-schema");
+        assert_eq!(out.status.code(), Some(1), "runtime errors stay exit 1");
+        assert_eq!(
+            run(&["status", "--chek"]).status.code(),
+            Some(2),
+            "usage errors stay exit 2"
+        );
+
+        guard.cleanup().await;
+    }
+
+    /// Hold advisory lock `key` here, start `soma-schema up` with `configure` applied, and
+    /// check that the CLI queues on exactly that key (via pg_locks) and then completes once
+    /// the key is released.
+    async fn assert_up_uses_lock_key(key: i64, configure: impl FnOnce(&mut Command)) {
+        let pool = make_pool().await;
+        let guard = make_schema(&pool).await;
+        let schema = guard.schema.clone();
+
+        let sql = with_schema(&migration_create_table("tbl_cli_key"), &schema);
+        let f = MigrationsFixture::build(
+            Some("SELECT 1;"),
+            &[(1, vec![("20260101_01_init.sql", &sql)])],
+            None,
+        );
+
+        let mut holder = PgConnection::connect(&test_db_url())
+            .await
+            .expect("connect holder");
+        sqlx::query("SELECT pg_advisory_lock($1)")
+            .bind(key)
+            .execute(&mut holder)
+            .await
+            .expect("hold key");
+
+        let mut cmd = soma_schema(&schema, &f.root);
+        configure(&mut cmd);
+        let child = cmd
+            .arg("up")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn soma-schema");
+
+        // A blocked pg_advisory_lock(bigint) is listed as not granted, with the key split
+        // into classid (high 32 bits) and objid (low 32 bits).
+        let mut waiting = 0_i64;
+        for _ in 0..200 {
+            waiting = sqlx::query_scalar(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND objsubid = 1 \
+                 AND NOT granted AND ((classid::bigint << 32) | objid::bigint) = $1",
+            )
+            .bind(key)
+            .fetch_one(&pool)
+            .await
+            .expect("query pg_locks");
+            if waiting == 1 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+
+        // Release before asserting so the CLI can exit whatever happened above.
+        sqlx::query("SELECT pg_advisory_unlock($1)")
+            .bind(key)
+            .execute(&mut holder)
+            .await
+            .expect("release key");
+        let out = child.wait_with_output().expect("wait for soma-schema");
+        assert_eq!(
+            waiting, 1,
+            "soma-schema never queued on advisory lock key {key}"
+        );
+        assert!(
+            out.status.success(),
+            "up failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        guard.cleanup().await;
+    }
+
+    /// `--advisory-lock-key` reaches Postgres. Negative on purpose: it is passed as a
+    /// separate argument, which clap only accepts for an i64 with allow_negative_numbers.
+    #[tokio::test]
+    async fn test_cli_advisory_lock_key_flag() {
+        let key = -7_000_000_001_i64;
+        assert_up_uses_lock_key(key, |cmd| {
+            cmd.args(["--advisory-lock-key", &key.to_string()]);
+        })
+        .await;
+    }
+
+    /// SOMA_SCHEMA_ADVISORY_LOCK_KEY reaches Postgres when the flag is absent.
+    #[tokio::test]
+    async fn test_cli_advisory_lock_key_env() {
+        let key = 7_000_000_002_i64;
+        assert_up_uses_lock_key(key, |cmd| {
+            cmd.env("SOMA_SCHEMA_ADVISORY_LOCK_KEY", key.to_string());
+        })
+        .await;
+    }
+}

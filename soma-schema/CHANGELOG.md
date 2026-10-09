@@ -4,6 +4,20 @@ All notable changes to soma-schema are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.0] — 2026-10-09
+
+### Added
+
+- **CLI `--advisory-lock-key <i64>`** (env `SOMA_SCHEMA_ADVISORY_LOCK_KEY`): sets
+  `PostgresConfig.advisory_lock_key` for `up` and `down`, so CLI runs can share a
+  per-service lock key with the library. Without it the key stays `918273645`.
+- **`status --check`**: prints the usual report, then exits `3` when migrations are
+  pending or `4` when drift is detected (`0` when clean). Plain `status` is unchanged.
+- **`Dockerfile`** for a minimal, non-root CLI image (`docker build -t soma-schema .`
+  from the crate directory).
+
 ## [0.3.0] — 2026-06-25
 
 ### Added
