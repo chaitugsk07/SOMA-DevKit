@@ -6,6 +6,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-09
+
 ### Added
 
 - **CLI `--advisory-lock-key <i64>`** (env `SOMA_SCHEMA_ADVISORY_LOCK_KEY`): sets
